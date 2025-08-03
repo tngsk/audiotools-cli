@@ -69,7 +69,7 @@ impl SpectrogramConfig {
     ) -> Result<Self, ConfigError> {
         let hop_size = Self::calculate_hop_size(window_size, quality_level);
 
-        let config = Self {
+        let mut config = Self {
             window_size,
             hop_size,
             sample_rate,
@@ -95,7 +95,7 @@ impl SpectrogramConfig {
         // Use fixed high-resolution hop_size (87.5% overlap) for smooth spectrograms
         let hop_size = (window_size / 8).max(1);
 
-        let config = Self {
+        let mut config = Self {
             window_size,
             hop_size,
             sample_rate,
@@ -123,7 +123,7 @@ impl SpectrogramConfig {
     }
 
     /// Validate configuration parameters
-    pub fn validate(&self) -> Result<(), ConfigError> {
+    pub fn validate(&mut self) -> Result<(), ConfigError> {
         // Validate window size
         if self.window_size == 0 || !self.window_size.is_power_of_two() {
             return Err(ConfigError::InvalidWindowSize(
@@ -150,11 +150,12 @@ impl SpectrogramConfig {
             ));
         }
 
+        // Auto-adjust max frequency to Nyquist frequency if it exceeds
         let nyquist = self.sample_rate / 2.0;
         if self.max_freq > nyquist {
-            return Err(ConfigError::InvalidFrequencyRange(format!(
-                "Maximum frequency exceeds Nyquist frequency"
-            )));
+            eprintln!("Warning: Max frequency {:.1} Hz exceeds Nyquist frequency {:.1} Hz. Auto-adjusting to {:.1} Hz.",
+                     self.max_freq, nyquist, nyquist);
+            self.max_freq = nyquist;
         }
 
         Ok(())
@@ -199,12 +200,13 @@ impl SpectrogramConfig {
 
     /// Get frequency range from preset
     pub fn frequency_preset(preset: FrequencyPreset, sample_rate: f32) -> (f32, f32) {
+        let nyquist = sample_rate / 2.0;
         match preset {
-            FrequencyPreset::Full => (20.0, sample_rate / 2.0),
-            FrequencyPreset::AudioRange => (20.0, 20000.0),
-            FrequencyPreset::SpeechRange => (80.0, 8000.0),
-            FrequencyPreset::MusicRange => (80.0, 12000.0),
-            FrequencyPreset::Bass => (60.0, 250.0),
+            FrequencyPreset::Full => (20.0, nyquist),
+            FrequencyPreset::AudioRange => (20.0, 20000.0_f32.min(nyquist)),
+            FrequencyPreset::SpeechRange => (80.0, 8000.0_f32.min(nyquist)),
+            FrequencyPreset::MusicRange => (80.0, 12000.0_f32.min(nyquist)),
+            FrequencyPreset::Bass => (60.0, 250.0_f32.min(nyquist)),
         }
     }
 
@@ -216,6 +218,13 @@ impl SpectrogramConfig {
     ) -> Result<Self, ConfigError> {
         self.min_freq = min_freq;
         self.max_freq = max_freq;
+
+        // Auto-adjust max frequency if needed
+        let nyquist = self.sample_rate / 2.0;
+        if self.max_freq > nyquist {
+            self.max_freq = nyquist;
+        }
+
         self.validate()?;
         Ok(self)
     }
@@ -263,5 +272,32 @@ mod tests {
         let (min, max) = SpectrogramConfig::frequency_preset(FrequencyPreset::SpeechRange, 44100.0);
         assert_eq!(min, 80.0);
         assert_eq!(max, 8000.0);
+    }
+
+    #[test]
+    fn test_low_sample_rate_auto_adjustment() {
+        // Test with 16kHz sample rate (Nyquist = 8kHz)
+        let config =
+            SpectrogramConfig::new(16000.0, 20.0, 20000.0, 2048, QualityLevel::Standard).unwrap();
+
+        // Max frequency should be auto-adjusted to Nyquist frequency
+        assert_eq!(config.max_freq, 8000.0);
+
+        // Test with very low sample rate (8kHz, Nyquist = 4kHz)
+        let config2 =
+            SpectrogramConfig::new(8000.0, 80.0, 8000.0, 1024, QualityLevel::Standard).unwrap();
+        assert_eq!(config2.max_freq, 4000.0);
+    }
+
+    #[test]
+    fn test_frequency_preset_with_low_sample_rate() {
+        // Test presets with low sample rate
+        let (min, max) = SpectrogramConfig::frequency_preset(FrequencyPreset::AudioRange, 16000.0);
+        assert_eq!(min, 20.0);
+        assert_eq!(max, 8000.0); // Should be limited to Nyquist frequency
+
+        let (min, max) = SpectrogramConfig::frequency_preset(FrequencyPreset::SpeechRange, 8000.0);
+        assert_eq!(min, 80.0);
+        assert_eq!(max, 4000.0); // Should be limited to Nyquist frequency
     }
 }

@@ -1,5 +1,5 @@
 # Default target directory for binaries
-TARGET_DIR = $(HOME)/tools
+TARGET_DIR = $(HOME)/bin
 
 # Binary names
 BINARIES = audiotools fmtr
