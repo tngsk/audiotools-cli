@@ -1,9 +1,9 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 use audiotools::command::{
     convert, info, loudness, normalize,
-    spectrum::{self, parse_frequency_annotation},
+    spectrum::{self, parse_frequency_annotation, FrequencyPreset},
     waveform::{self, parse_time_annotation, WaveformScale},
 };
 
@@ -158,6 +158,10 @@ enum Commands {
         #[arg(long, default_value = "20000.0")]
         max_freq: f32,
 
+        /// Frequency range preset (overrides min/max-freq)
+        #[arg(long, value_enum)]
+        freq_preset: Option<FrequencyPresetArg>,
+
         /// Process directories recursively
         #[arg(short, long)]
         recursive: bool,
@@ -311,6 +315,7 @@ fn main() {
             overlap,
             min_freq,
             max_freq,
+            freq_preset,
             recursive,
             start,
             end,
@@ -327,12 +332,23 @@ fn main() {
                 detection_window,
                 min_duration,
             );
+
+            // Handle frequency preset override
+            let (final_min_freq, final_max_freq) = if let Some(preset) = freq_preset {
+                // For now, use a default sample rate for preset calculation
+                // In a real scenario, we would load the audio file first
+                let default_sample_rate = 44100.0;
+                spectrum::get_frequency_preset(preset.into(), default_sample_rate)
+            } else {
+                (min_freq, max_freq)
+            };
+
             spectrum::create_spectrograms(
                 &input,
                 window_size,
                 overlap,
-                min_freq,
-                max_freq,
+                final_min_freq,
+                final_max_freq,
                 time_range,
                 auto_start_config,
                 recursive,
@@ -368,6 +384,27 @@ fn main() {
                 annotations,
                 show_rms,
             );
+        }
+    }
+}
+
+#[derive(ValueEnum, Clone, Debug)]
+enum FrequencyPresetArg {
+    Full,
+    AudioRange,
+    SpeechRange,
+    MusicRange,
+    Bass,
+}
+
+impl From<FrequencyPresetArg> for FrequencyPreset {
+    fn from(arg: FrequencyPresetArg) -> Self {
+        match arg {
+            FrequencyPresetArg::Full => FrequencyPreset::Full,
+            FrequencyPresetArg::AudioRange => FrequencyPreset::AudioRange,
+            FrequencyPresetArg::SpeechRange => FrequencyPreset::SpeechRange,
+            FrequencyPresetArg::MusicRange => FrequencyPreset::MusicRange,
+            FrequencyPresetArg::Bass => FrequencyPreset::Bass,
         }
     }
 }

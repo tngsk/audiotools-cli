@@ -1,0 +1,267 @@
+use std::fmt;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum WindowType {
+    Hanning,
+    Hamming,
+    Blackman,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum QualityLevel {
+    Fast,     // 50% overlap
+    Standard, // 75% overlap
+    High,     // 87.5% overlap
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum FrequencyPreset {
+    Full,        // 20 Hz to Nyquist
+    AudioRange,  // 20 Hz to 20 kHz
+    SpeechRange, // 80 Hz to 8 kHz
+    MusicRange,  // 80 Hz to 12 kHz
+    Bass,        // 60-250 Hz
+}
+
+#[derive(Debug, Clone)]
+pub struct SpectrogramConfig {
+    pub window_size: usize,
+    pub hop_size: usize,
+    pub sample_rate: f32,
+    pub min_freq: f32,
+    pub max_freq: f32,
+    pub image_width: u32,
+    pub image_height: u32,
+    pub window_type: WindowType,
+}
+
+#[derive(Debug)]
+pub enum ConfigError {
+    InvalidWindowSize(String),
+    InvalidHopSize(String),
+    InvalidFrequencyRange(String),
+    InvalidSampleRate(String),
+}
+
+impl fmt::Display for ConfigError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ConfigError::InvalidWindowSize(msg) => write!(f, "Invalid window size: {}", msg),
+            ConfigError::InvalidHopSize(msg) => write!(f, "Invalid hop size: {}", msg),
+            ConfigError::InvalidFrequencyRange(msg) => {
+                write!(f, "Invalid frequency range: {}", msg)
+            }
+            ConfigError::InvalidSampleRate(msg) => write!(f, "Invalid sample rate: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for ConfigError {}
+
+impl SpectrogramConfig {
+    /// Create a new configuration with manual parameters
+    pub fn new(
+        sample_rate: f32,
+        min_freq: f32,
+        max_freq: f32,
+        window_size: usize,
+        quality_level: QualityLevel,
+    ) -> Result<Self, ConfigError> {
+        let hop_size = Self::calculate_hop_size(window_size, quality_level);
+
+        let config = Self {
+            window_size,
+            hop_size,
+            sample_rate,
+            min_freq,
+            max_freq,
+            image_width: 1200,
+            image_height: 600,
+            window_type: WindowType::Hanning,
+        };
+
+        config.validate()?;
+        Ok(config)
+    }
+
+    /// Create configuration from legacy parameters
+    pub fn from_legacy_params(
+        window_size: usize,
+        _overlap: f32, // Ignored - use fixed high-resolution hop_size
+        min_freq: f32,
+        max_freq: f32,
+        sample_rate: f32,
+    ) -> Result<Self, ConfigError> {
+        // Use fixed high-resolution hop_size (87.5% overlap) for smooth spectrograms
+        let hop_size = (window_size / 8).max(1);
+
+        let config = Self {
+            window_size,
+            hop_size,
+            sample_rate,
+            min_freq,
+            max_freq,
+            image_width: 1200,
+            image_height: 600,
+            window_type: WindowType::Hanning,
+        };
+
+        config.validate()?;
+        Ok(config)
+    }
+
+    /// Calculate hop size based on quality level
+    fn calculate_hop_size(window_size: usize, quality: QualityLevel) -> usize {
+        let overlap_ratio = match quality {
+            QualityLevel::Fast => 0.5,      // 50% overlap
+            QualityLevel::Standard => 0.75, // 75% overlap
+            QualityLevel::High => 0.875,    // 87.5% overlap
+        };
+
+        let hop_size = (window_size as f32 * (1.0 - overlap_ratio)) as usize;
+        hop_size.max(1)
+    }
+
+    /// Validate configuration parameters
+    pub fn validate(&self) -> Result<(), ConfigError> {
+        // Validate window size
+        if self.window_size == 0 || !self.window_size.is_power_of_two() {
+            return Err(ConfigError::InvalidWindowSize(
+                "Window size must be a power of 2".to_string(),
+            ));
+        }
+
+        // Validate hop size
+        if self.hop_size == 0 || self.hop_size > self.window_size {
+            return Err(ConfigError::InvalidHopSize("Invalid hop size".to_string()));
+        }
+
+        // Validate sample rate
+        if self.sample_rate <= 0.0 {
+            return Err(ConfigError::InvalidSampleRate(
+                "Sample rate must be positive".to_string(),
+            ));
+        }
+
+        // Validate frequency range
+        if self.min_freq <= 0.0 || self.max_freq <= self.min_freq {
+            return Err(ConfigError::InvalidFrequencyRange(
+                "Invalid frequency range".to_string(),
+            ));
+        }
+
+        let nyquist = self.sample_rate / 2.0;
+        if self.max_freq > nyquist {
+            return Err(ConfigError::InvalidFrequencyRange(format!(
+                "Maximum frequency exceeds Nyquist frequency"
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Calculate frequency resolution in Hz
+    pub fn freq_resolution(&self) -> f32 {
+        self.sample_rate / self.window_size as f32
+    }
+
+    /// Calculate time resolution in seconds
+    pub fn time_resolution(&self) -> f32 {
+        self.hop_size as f32 / self.sample_rate
+    }
+
+    /// Calculate number of frequency bins
+    pub fn freq_bins(&self) -> usize {
+        self.window_size / 2
+    }
+
+    /// Calculate expected number of time frames for given sample count
+    pub fn time_frames(&self, sample_count: usize) -> usize {
+        if sample_count < self.window_size {
+            return 0;
+        }
+        (sample_count - self.window_size) / self.hop_size + 1
+    }
+
+    /// Get time step for rendering (time per frame)
+    pub fn time_step(&self, total_frames: usize, total_duration: f32) -> f32 {
+        if total_frames <= 1 {
+            total_duration
+        } else {
+            total_duration / total_frames as f32
+        }
+    }
+
+    /// Get frequency step for rendering
+    pub fn freq_step(&self) -> f32 {
+        self.freq_resolution()
+    }
+
+    /// Get frequency range from preset
+    pub fn frequency_preset(preset: FrequencyPreset, sample_rate: f32) -> (f32, f32) {
+        match preset {
+            FrequencyPreset::Full => (20.0, sample_rate / 2.0),
+            FrequencyPreset::AudioRange => (20.0, 20000.0),
+            FrequencyPreset::SpeechRange => (80.0, 8000.0),
+            FrequencyPreset::MusicRange => (80.0, 12000.0),
+            FrequencyPreset::Bass => (60.0, 250.0),
+        }
+    }
+
+    /// Set custom frequency range
+    pub fn with_frequency_range(
+        mut self,
+        min_freq: f32,
+        max_freq: f32,
+    ) -> Result<Self, ConfigError> {
+        self.min_freq = min_freq;
+        self.max_freq = max_freq;
+        self.validate()?;
+        Ok(self)
+    }
+}
+
+impl Default for SpectrogramConfig {
+    fn default() -> Self {
+        Self {
+            window_size: 2048,
+            hop_size: 512,
+            sample_rate: 44100.0,
+            min_freq: 20.0,
+            max_freq: 20000.0,
+            image_width: 1200,
+            image_height: 600,
+            window_type: WindowType::Hanning,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_config_creation() {
+        let config =
+            SpectrogramConfig::new(44100.0, 20.0, 20000.0, 2048, QualityLevel::Standard).unwrap();
+
+        assert!(config.window_size.is_power_of_two());
+        assert!(config.hop_size < config.window_size);
+    }
+
+    #[test]
+    fn test_legacy_compatibility() {
+        let config =
+            SpectrogramConfig::from_legacy_params(2048, 0.75, 20.0, 20000.0, 44100.0).unwrap();
+
+        assert_eq!(config.window_size, 2048);
+        assert_eq!(config.hop_size, 256); // Fixed to window_size / 8 for high resolution
+    }
+
+    #[test]
+    fn test_frequency_presets() {
+        let (min, max) = SpectrogramConfig::frequency_preset(FrequencyPreset::SpeechRange, 44100.0);
+        assert_eq!(min, 80.0);
+        assert_eq!(max, 8000.0);
+    }
+}
