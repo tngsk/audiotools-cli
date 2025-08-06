@@ -142,7 +142,7 @@ enum Commands {
         #[arg(short, long)]
         input: PathBuf,
 
-        /// FFT window size
+        /// FFT window size (0 for auto-configure based on audio duration)
         #[arg(long, default_value = "2048")]
         window_size: usize,
 
@@ -161,6 +161,10 @@ enum Commands {
         /// Frequency range preset (overrides min/max-freq)
         #[arg(long, value_enum)]
         freq_preset: Option<FrequencyPresetArg>,
+
+        /// Enable adaptive mode for short audio optimization
+        #[arg(long)]
+        adaptive: bool,
 
         /// Process directories recursively
         #[arg(short, long)]
@@ -316,6 +320,7 @@ fn main() {
             min_freq,
             max_freq,
             freq_preset,
+            adaptive,
             recursive,
             start,
             end,
@@ -343,17 +348,35 @@ fn main() {
                 (min_freq, max_freq)
             };
 
-            spectrum::create_spectrograms(
-                &input,
-                window_size,
-                overlap,
-                final_min_freq,
-                final_max_freq,
-                time_range,
-                auto_start_config,
-                recursive,
-                annotations,
-            );
+            if adaptive || window_size == 0 {
+                spectrum::create_spectrograms_adaptive(
+                    &input,
+                    if window_size == 0 {
+                        None
+                    } else {
+                        Some(window_size)
+                    },
+                    overlap,
+                    final_min_freq,
+                    final_max_freq,
+                    time_range,
+                    auto_start_config,
+                    recursive,
+                    annotations,
+                );
+            } else {
+                spectrum::create_spectrograms(
+                    &input,
+                    window_size,
+                    overlap,
+                    final_min_freq,
+                    final_max_freq,
+                    time_range,
+                    auto_start_config,
+                    recursive,
+                    annotations,
+                );
+            }
         }
         Commands::Waveform {
             input,

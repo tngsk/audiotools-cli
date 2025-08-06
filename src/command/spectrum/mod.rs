@@ -55,6 +55,7 @@ pub fn create_spectrograms_adaptive(
     recursive: bool,
     annotations: Option<Vec<(f32, String)>>,
 ) -> Vec<PathBuf> {
+    let mut output_files = Vec::new();
     let effective_window_size = window_size.unwrap_or(0); // 0 means auto-configure
 
     for entry in get_walker(input, recursive) {
@@ -80,6 +81,7 @@ pub fn create_spectrograms_adaptive(
                             input_path.display(),
                             output_path.display()
                         );
+                        output_files.push(output_path);
                     }
                     Err(e) => {
                         eprintln!("Error processing {}: {}", input_path.display(), e);
@@ -89,7 +91,7 @@ pub fn create_spectrograms_adaptive(
         }
     }
 
-    Vec::new() // Simplified return for now
+    output_files
 }
 
 /// Create spectrograms for multiple files (legacy API)
@@ -157,33 +159,8 @@ pub fn create_spectrogram(
     // Load audio data
     let audio_data = load_audio_samples(input)?;
     let total_duration = audio_data.samples.len() as f32 / audio_data.sample_rate;
-    let duration_ms = total_duration * 1000.0;
 
-    // Determine if we should use adaptive configuration for short audio
-    let config = if window_size == 0 {
-        // Auto-configure based on duration
-        SpectrogramConfig::auto_configure(audio_data.sample_rate, min_freq, max_freq, duration_ms)?
-    } else if duration_ms < 500.0 {
-        // For short audio, use optimized configuration
-        SpectrogramConfig::for_short_audio(audio_data.sample_rate, min_freq, max_freq, duration_ms)?
-    } else {
-        // Use legacy configuration with duration hint
-        SpectrogramConfig::from_legacy_params_with_duration(
-            window_size,
-            overlap,
-            min_freq,
-            max_freq,
-            audio_data.sample_rate,
-            Some(duration_ms),
-        )?
-    };
-
-    println!(
-        "Audio duration: {:.1}ms, using window_size: {}, hop_size: {}",
-        duration_ms, config.window_size, config.hop_size
-    );
-
-    // Process time range
+    // Process time range first to get actual analysis duration
     let (start_time, end_time) = process_time_range(
         &audio_data.samples,
         audio_data.sample_rate,
@@ -192,6 +169,44 @@ pub fn create_spectrogram(
         total_duration,
     )?;
 
+    // Calculate actual analysis duration in milliseconds
+    let analysis_duration = end_time - start_time;
+    let analysis_duration_ms = analysis_duration * 1000.0;
+
+    // Determine if we should use adaptive configuration based on actual analysis duration
+    let config = if window_size == 0 {
+        // Auto-configure based on actual analysis duration
+        SpectrogramConfig::auto_configure(
+            audio_data.sample_rate,
+            min_freq,
+            max_freq,
+            analysis_duration_ms,
+        )?
+    } else if analysis_duration_ms < 500.0 {
+        // For short analysis duration, use optimized configuration
+        SpectrogramConfig::for_short_audio(
+            audio_data.sample_rate,
+            min_freq,
+            max_freq,
+            analysis_duration_ms,
+        )?
+    } else {
+        // Use legacy configuration with analysis duration hint
+        SpectrogramConfig::from_legacy_params_with_duration(
+            window_size,
+            overlap,
+            min_freq,
+            max_freq,
+            audio_data.sample_rate,
+            Some(analysis_duration_ms),
+        )?
+    };
+
+    println!(
+        "Analysis duration: {:.1}ms ({}s to {}s), using window_size: {}, hop_size: {}",
+        analysis_duration_ms, start_time, end_time, config.window_size, config.hop_size
+    );
+
     // Extract sample range
     let start_sample = (start_time * audio_data.sample_rate) as usize;
     let end_sample = (end_time * audio_data.sample_rate) as usize;
@@ -199,14 +214,14 @@ pub fn create_spectrogram(
 
     // Generate spectrogram with padding for short audio
     let fft_processor = FFTProcessor::new(config.clone());
-    let spectrogram_data = if duration_ms < 200.0 {
-        // Add zero padding for very short audio (20% padding)
+    let spectrogram_data = if analysis_duration_ms < 200.0 {
+        // Add zero padding for very short analysis (20% padding)
         fft_processor.process_signal_with_padding(samples, 0.2)?
-    } else if duration_ms < 500.0 {
-        // Add light padding for short audio (10% padding)
+    } else if analysis_duration_ms < 500.0 {
+        // Add light padding for short analysis (10% padding)
         fft_processor.process_signal_with_padding(samples, 0.1)?
     } else {
-        // No padding for longer audio
+        // No padding for longer analysis
         fft_processor.process_signal(samples)?
     };
 
@@ -218,6 +233,7 @@ pub fn create_spectrogram(
         input,
         start_time,
         end_time,
+        analysis_duration_ms,
         annotations,
     )?;
 
@@ -319,6 +335,7 @@ fn render_spectrogram(
     input: &PathBuf,
     start_time: f32,
     end_time: f32,
+    analysis_duration_ms: f32,
     annotations: Option<Vec<(f32, String)>>,
 ) -> Result<()> {
     if spectrogram_data.is_empty() {
@@ -336,10 +353,12 @@ fn render_spectrogram(
     root.fill(&BACKGROUND_COLOR)
         .map_err(|e| SpectrogramError::InvalidInput(e.to_string()))?;
 
-    let title = input
+    let filename = input
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or("Spectrogram");
+
+    let title = format!("{} ({:.1}ms)", filename, analysis_duration_ms);
 
     let total_time = end_time - start_time;
     let time_per_frame = if spectrogram_data.len() > 1 {
@@ -372,7 +391,13 @@ fn render_spectrogram(
         .map_err(|e| SpectrogramError::InvalidInput(e.to_string()))?;
 
     // Draw spectrogram data with improved resolution
-    draw_spectrogram_data(&mut chart, spectrogram_data, config, time_per_frame)?;
+    draw_spectrogram_data(
+        &mut chart,
+        spectrogram_data,
+        config,
+        time_per_frame,
+        analysis_duration_ms,
+    )?;
 
     // Draw annotations
     if let Some(annotations) = annotations {
@@ -394,11 +419,12 @@ fn draw_spectrogram_data(
     spectrogram_data: &[Vec<f32>],
     config: &SpectrogramConfig,
     time_per_frame: f32,
+    analysis_duration_ms: f32,
 ) -> Result<()> {
     let freq_resolution = config.freq_resolution();
 
-    // For very short audio with many frames, use interpolated rendering
-    let use_interpolation = spectrogram_data.len() > 100 && time_per_frame < 0.001;
+    // For very short analysis with many frames, use interpolated rendering
+    let use_interpolation = analysis_duration_ms < 200.0 && spectrogram_data.len() > 50;
 
     // Use exact steps without artificial overlap to prevent gaps and artifacts
     let time_step = if use_interpolation {
@@ -411,7 +437,13 @@ fn draw_spectrogram_data(
 
     // Apply interpolation for smooth rendering if needed
     if use_interpolation && spectrogram_data.len() > 1 {
-        draw_interpolated_spectrogram(chart, spectrogram_data, config, time_per_frame)?;
+        draw_interpolated_spectrogram(
+            chart,
+            spectrogram_data,
+            config,
+            time_per_frame,
+            analysis_duration_ms,
+        )?;
     } else {
         // Standard rendering for longer audio
         for (frame_idx, spectrum) in spectrogram_data.iter().enumerate() {
@@ -456,6 +488,7 @@ fn draw_interpolated_spectrogram(
     spectrogram_data: &[Vec<f32>],
     config: &SpectrogramConfig,
     time_per_frame: f32,
+    _analysis_duration_ms: f32,
 ) -> Result<()> {
     let freq_resolution = config.freq_resolution();
 
@@ -626,5 +659,64 @@ mod tests {
         let (min, max) = get_frequency_preset(FrequencyPreset::Bass, 44100.0);
         assert_eq!(min, 60.0);
         assert_eq!(max, 250.0);
+    }
+
+    #[test]
+    fn test_time_range_adaptive_config() {
+        use crate::utils::time::{TimeRange, TimeSpecification};
+
+        // Create a mock audio data (10 seconds)
+        let sample_rate = 44100.0;
+        let samples = vec![0.0; (10.0 * sample_rate) as usize];
+        let total_duration = 10.0;
+
+        // Test short time range (100ms) within long audio
+        let time_range = Some(TimeRange {
+            start: TimeSpecification::Seconds(5.0),
+            end: TimeSpecification::Seconds(5.1), // 100ms duration
+        });
+
+        let (start_time, end_time) =
+            process_time_range(&samples, sample_rate, time_range, None, total_duration).unwrap();
+
+        let analysis_duration_ms = (end_time - start_time) * 1000.0;
+        assert!((analysis_duration_ms - 100.0).abs() < 1.0); // Should be ~100ms
+
+        // Auto-configure should use small window size for this short duration
+        let config =
+            SpectrogramConfig::auto_configure(sample_rate, 20.0, 20000.0, analysis_duration_ms)
+                .unwrap();
+
+        assert_eq!(config.window_size, 256); // Should use small window for 100ms
+        assert_eq!(config.hop_size, 12); // 95% overlap for very short duration
+    }
+
+    #[test]
+    fn test_percentage_time_range_adaptive_config() {
+        use crate::utils::time::{TimeRange, TimeSpecification};
+
+        // Create a mock audio data (2 seconds)
+        let sample_rate = 44100.0;
+        let samples = vec![0.0; (2.0 * sample_rate) as usize];
+        let total_duration = 2.0;
+
+        // Test seconds-based short range (100ms)
+        let time_range = Some(TimeRange {
+            start: TimeSpecification::Seconds(0.4), // 0.4s
+            end: TimeSpecification::Seconds(0.5),   // 0.5s, so 100ms duration
+        });
+
+        let (start_time, end_time) =
+            process_time_range(&samples, sample_rate, time_range, None, total_duration).unwrap();
+
+        let analysis_duration_ms = (end_time - start_time) * 1000.0;
+        assert!((analysis_duration_ms - 100.0).abs() < 1.0); // Should be ~100ms
+
+        // Should use adaptive configuration for this short analysis duration
+        let config =
+            SpectrogramConfig::for_short_audio(sample_rate, 20.0, 20000.0, analysis_duration_ms)
+                .unwrap();
+
+        assert_eq!(config.window_size, 256); // Small window for short analysis
     }
 }

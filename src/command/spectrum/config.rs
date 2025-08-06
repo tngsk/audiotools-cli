@@ -68,6 +68,21 @@ impl std::error::Error for ConfigError {}
 
 impl SpectrogramConfig {
     /// Calculate optimal window size based on audio duration
+    ///
+    /// This considers the actual analysis duration, which may be shorter than
+    /// the total file duration when using --start/--end options.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // 50ms analysis (very short) - use small window for high time resolution
+    /// let window_size = SpectrogramConfig::calculate_optimal_window_size(50.0, 44100.0);
+    /// assert_eq!(window_size, 256);
+    ///
+    /// // 10-second file but analyzing only 80ms section (--start 5.0 --end 5.08)
+    /// let window_size = SpectrogramConfig::calculate_optimal_window_size(80.0, 44100.0);
+    /// assert_eq!(window_size, 256); // Still uses small window for short analysis
+    /// ```
     pub fn calculate_optimal_window_size(duration_ms: f32, _sample_rate: f32) -> usize {
         // Adaptive window size selection based on duration
         let window_size = if duration_ms < 100.0 {
@@ -113,6 +128,23 @@ impl SpectrogramConfig {
     }
 
     /// Create configuration optimized for short audio
+    ///
+    /// This method is automatically used when the analysis duration (considering --start/--end)
+    /// is less than 500ms, regardless of the total file duration.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // 80ms analysis duration - uses 256 window with 95% overlap
+    /// let config = SpectrogramConfig::for_short_audio(44100.0, 20.0, 8000.0, 80.0)?;
+    /// assert_eq!(config.window_size, 256);
+    /// assert_eq!(config.hop_size, 12); // 95% overlap
+    ///
+    /// // 300ms analysis duration - uses 512 window with 90% overlap
+    /// let config = SpectrogramConfig::for_short_audio(44100.0, 20.0, 8000.0, 300.0)?;
+    /// assert_eq!(config.window_size, 512);
+    /// assert_eq!(config.hop_size, 51); // 90% overlap
+    /// ```
     pub fn for_short_audio(
         sample_rate: f32,
         min_freq: f32,
@@ -215,6 +247,21 @@ impl SpectrogramConfig {
     }
 
     /// Create configuration with automatic window size selection
+    ///
+    /// Automatically selects optimal parameters based on analysis duration.
+    /// This is used when --window-size is set to 0 or --adaptive flag is used.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Auto-configure for 120ms analysis
+    /// // - Uses window_size=256, hop_size=13 (95% overlap)
+    /// let config = SpectrogramConfig::auto_configure(44100.0, 20.0, 20000.0, 120.0)?;
+    ///
+    /// // Auto-configure for 1500ms analysis
+    /// // - Uses window_size=1024, hop_size=128 (87.5% overlap)
+    /// let config = SpectrogramConfig::auto_configure(44100.0, 20.0, 20000.0, 1500.0)?;
+    /// ```
     pub fn auto_configure(
         sample_rate: f32,
         min_freq: f32,
