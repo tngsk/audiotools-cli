@@ -1,8 +1,7 @@
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub enum TimeSpecification {
     Seconds(f32),             // 秒指定
     MinutesSeconds(u32, u32), // 分:秒指定
-    Percentage(f32),          // パーセンテージ指定
 }
 
 #[derive(Clone, Debug)]
@@ -13,16 +12,15 @@ pub struct TimeRange {
 
 impl TimeRange {
     pub fn resolve(&self, total_duration: f32) -> Result<(f32, f32), String> {
-        let convert_to_seconds = |spec: &TimeSpecification, total: f32| -> Result<f32, String> {
+        let resolve_spec = |spec: &TimeSpecification| -> Result<f32, String> {
             match spec {
                 TimeSpecification::Seconds(s) => Ok(*s),
                 TimeSpecification::MinutesSeconds(m, s) => Ok(*m as f32 * 60.0 + *s as f32),
-                TimeSpecification::Percentage(p) => Ok(total * p),
             }
         };
 
-        let start_time = convert_to_seconds(&self.start, total_duration)?;
-        let end_time = convert_to_seconds(&self.end, total_duration)?;
+        let start_time = resolve_spec(&self.start)?;
+        let end_time = resolve_spec(&self.end)?;
 
         // 妥当性チェック
         if start_time >= end_time {
@@ -49,25 +47,16 @@ pub fn create_time_range(
     if start.is_some() || end.is_some() {
         Some(TimeRange {
             start: start.unwrap_or(TimeSpecification::Seconds(0.0)),
-            end: end.unwrap_or(TimeSpecification::Percentage(1.0)),
+            end: end.unwrap_or(TimeSpecification::Seconds(f32::MAX)),
         })
     } else {
         None
     }
 }
 
+/// 時間指定文字列をパース
 pub fn parse_time_specification(time_str: &str) -> Result<TimeSpecification, String> {
-    if time_str.ends_with('%') {
-        // パーセンテージ指定
-        let percentage = time_str
-            .trim_end_matches('%')
-            .parse::<f32>()
-            .map_err(|_| "Invalid percentage format")?;
-        if percentage < 0.0 || percentage > 100.0 {
-            return Err("Percentage must be between 0 and 100".to_string());
-        }
-        Ok(TimeSpecification::Percentage(percentage / 100.0))
-    } else if time_str.contains(':') {
+    if time_str.contains(':') {
         // 分:秒指定
         let parts: Vec<&str> = time_str.split(':').collect();
         if parts.len() != 2 {

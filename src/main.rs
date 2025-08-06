@@ -170,11 +170,11 @@ enum Commands {
         #[arg(short, long)]
         recursive: bool,
 
-        // Start time (seconds, MM:SS format, or percentage with %)
+        // Start time (seconds or MM:SS format)
         #[arg(long, value_parser = time::parse_time_specification)]
         start: Option<TimeSpecification>,
 
-        /// End time (seconds, MM:SS format, or percentage with %)
+        /// End time (seconds or MM:SS format)
         #[arg(long, value_parser = time::parse_time_specification)]
         end: Option<TimeSpecification>,
 
@@ -211,11 +211,11 @@ enum Commands {
         #[arg(long, value_enum, default_value = "amplitude")]
         scale: WaveformScale,
 
-        /// Start time (seconds, MM:SS format, or percentage with %)
+        /// Start time (seconds or MM:SS format)
         #[arg(long, value_parser = time::parse_time_specification)]
         start: Option<TimeSpecification>,
 
-        /// End time (seconds, MM:SS format, or percentage with %)
+        /// End time (seconds or MM:SS format)
         #[arg(long, value_parser = time::parse_time_specification)]
         end: Option<TimeSpecification>,
 

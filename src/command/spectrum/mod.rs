@@ -690,33 +690,4 @@ mod tests {
         assert_eq!(config.window_size, 256); // Should use small window for 100ms
         assert_eq!(config.hop_size, 12); // 95% overlap for very short duration
     }
-
-    #[test]
-    fn test_percentage_time_range_adaptive_config() {
-        use crate::utils::time::{TimeRange, TimeSpecification};
-
-        // Create a mock audio data (2 seconds)
-        let sample_rate = 44100.0;
-        let samples = vec![0.0; (2.0 * sample_rate) as usize];
-        let total_duration = 2.0;
-
-        // Test seconds-based short range (100ms)
-        let time_range = Some(TimeRange {
-            start: TimeSpecification::Seconds(0.4), // 0.4s
-            end: TimeSpecification::Seconds(0.5),   // 0.5s, so 100ms duration
-        });
-
-        let (start_time, end_time) =
-            process_time_range(&samples, sample_rate, time_range, None, total_duration).unwrap();
-
-        let analysis_duration_ms = (end_time - start_time) * 1000.0;
-        assert!((analysis_duration_ms - 100.0).abs() < 1.0); // Should be ~100ms
-
-        // Should use adaptive configuration for this short analysis duration
-        let config =
-            SpectrogramConfig::for_short_audio(sample_rate, 20.0, 20000.0, analysis_duration_ms)
-                .unwrap();
-
-        assert_eq!(config.window_size, 256); // Small window for short analysis
-    }
 }
