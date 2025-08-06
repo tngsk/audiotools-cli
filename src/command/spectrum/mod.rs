@@ -43,6 +43,55 @@ pub fn get_frequency_preset(preset: FrequencyPreset, sample_rate: f32) -> (f32, 
     SpectrogramConfig::frequency_preset(preset, sample_rate)
 }
 
+/// Create spectrograms for multiple files with adaptive settings
+pub fn create_spectrograms_adaptive(
+    input: &PathBuf,
+    window_size: Option<usize>,
+    overlap: f32,
+    min_freq: f32,
+    max_freq: f32,
+    time_range: Option<TimeRange>,
+    auto_start: Option<AutoStartDetection>,
+    recursive: bool,
+    annotations: Option<Vec<(f32, String)>>,
+) -> Vec<PathBuf> {
+    let effective_window_size = window_size.unwrap_or(0); // 0 means auto-configure
+
+    for entry in get_walker(input, recursive) {
+        if let Some(ext) = entry.path().extension() {
+            if ext.to_string_lossy().to_lowercase() == "wav" {
+                let input_path = PathBuf::from(entry.path());
+                let output_path = input_path.with_extension("png");
+
+                match create_spectrogram(
+                    &input_path,
+                    &output_path,
+                    effective_window_size,
+                    overlap,
+                    min_freq,
+                    max_freq,
+                    time_range.clone(),
+                    auto_start.clone(),
+                    annotations.clone(),
+                ) {
+                    Ok(_) => {
+                        println!(
+                            "Created spectrogram: {} -> {}",
+                            input_path.display(),
+                            output_path.display()
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!("Error processing {}: {}", input_path.display(), e);
+                    }
+                }
+            }
+        }
+    }
+
+    Vec::new() // Simplified return for now
+}
+
 /// Create spectrograms for multiple files (legacy API)
 pub fn create_spectrograms(
     input: &PathBuf,
@@ -108,15 +157,31 @@ pub fn create_spectrogram(
     // Load audio data
     let audio_data = load_audio_samples(input)?;
     let total_duration = audio_data.samples.len() as f32 / audio_data.sample_rate;
+    let duration_ms = total_duration * 1000.0;
 
-    // Create configuration
-    let config = SpectrogramConfig::from_legacy_params(
-        window_size,
-        overlap,
-        min_freq,
-        max_freq,
-        audio_data.sample_rate,
-    )?;
+    // Determine if we should use adaptive configuration for short audio
+    let config = if window_size == 0 {
+        // Auto-configure based on duration
+        SpectrogramConfig::auto_configure(audio_data.sample_rate, min_freq, max_freq, duration_ms)?
+    } else if duration_ms < 500.0 {
+        // For short audio, use optimized configuration
+        SpectrogramConfig::for_short_audio(audio_data.sample_rate, min_freq, max_freq, duration_ms)?
+    } else {
+        // Use legacy configuration with duration hint
+        SpectrogramConfig::from_legacy_params_with_duration(
+            window_size,
+            overlap,
+            min_freq,
+            max_freq,
+            audio_data.sample_rate,
+            Some(duration_ms),
+        )?
+    };
+
+    println!(
+        "Audio duration: {:.1}ms, using window_size: {}, hop_size: {}",
+        duration_ms, config.window_size, config.hop_size
+    );
 
     // Process time range
     let (start_time, end_time) = process_time_range(
@@ -132,9 +197,18 @@ pub fn create_spectrogram(
     let end_sample = (end_time * audio_data.sample_rate) as usize;
     let samples = &audio_data.samples[start_sample..end_sample.min(audio_data.samples.len())];
 
-    // Generate spectrogram
+    // Generate spectrogram with padding for short audio
     let fft_processor = FFTProcessor::new(config.clone());
-    let spectrogram_data = fft_processor.process_signal(samples)?;
+    let spectrogram_data = if duration_ms < 200.0 {
+        // Add zero padding for very short audio (20% padding)
+        fft_processor.process_signal_with_padding(samples, 0.2)?
+    } else if duration_ms < 500.0 {
+        // Add light padding for short audio (10% padding)
+        fft_processor.process_signal_with_padding(samples, 0.1)?
+    } else {
+        // No padding for longer audio
+        fft_processor.process_signal(samples)?
+    };
 
     // Render to image
     render_spectrogram(
@@ -323,24 +397,117 @@ fn draw_spectrogram_data(
 ) -> Result<()> {
     let freq_resolution = config.freq_resolution();
 
+    // For very short audio with many frames, use interpolated rendering
+    let use_interpolation = spectrogram_data.len() > 100 && time_per_frame < 0.001;
+
     // Use exact steps without artificial overlap to prevent gaps and artifacts
-    let time_step = time_per_frame;
+    let time_step = if use_interpolation {
+        // Slightly overlap for smoother rendering
+        time_per_frame * 1.1
+    } else {
+        time_per_frame
+    };
     let freq_step = freq_resolution;
 
-    for (frame_idx, spectrum) in spectrogram_data.iter().enumerate() {
+    // Apply interpolation for smooth rendering if needed
+    if use_interpolation && spectrogram_data.len() > 1 {
+        draw_interpolated_spectrogram(chart, spectrogram_data, config, time_per_frame)?;
+    } else {
+        // Standard rendering for longer audio
+        for (frame_idx, spectrum) in spectrogram_data.iter().enumerate() {
+            let time_start = frame_idx as f32 * time_per_frame;
+            let time_end = time_start + time_step;
+
+            for (bin, &power_db) in spectrum.iter().enumerate() {
+                // Calculate frequency directly from bin index
+                let freq_start = bin as f32 * freq_resolution;
+                let freq_end = freq_start + freq_step;
+
+                // Only render frequencies within our range
+                if freq_start >= config.min_freq && freq_start <= config.max_freq {
+                    let normalized_power =
+                        ((power_db - MIN_DB) / (MAX_DB - MIN_DB)).max(0.0).min(1.0);
+
+                    // Render all power levels for complete coverage
+                    if normalized_power > 0.001 {
+                        let color = power_to_color(normalized_power);
+
+                        chart
+                            .draw_series(std::iter::once(Rectangle::new(
+                                [(time_start, freq_start), (time_end, freq_end)],
+                                color.filled(),
+                            )))
+                            .map_err(|e| SpectrogramError::InvalidInput(e.to_string()))?;
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Draw spectrogram with interpolation for smooth rendering
+fn draw_interpolated_spectrogram(
+    chart: &mut ChartContext<
+        BitMapBackend,
+        Cartesian2d<plotters::coord::types::RangedCoordf32, plotters::coord::types::RangedCoordf32>,
+    >,
+    spectrogram_data: &[Vec<f32>],
+    config: &SpectrogramConfig,
+    time_per_frame: f32,
+) -> Result<()> {
+    let freq_resolution = config.freq_resolution();
+
+    // Render with interpolation between frames
+    for frame_idx in 0..spectrogram_data.len() - 1 {
+        let current_spectrum = &spectrogram_data[frame_idx];
+        let next_spectrum = &spectrogram_data[frame_idx + 1];
+
         let time_start = frame_idx as f32 * time_per_frame;
-        let time_end = time_start + time_step;
+        let time_end = (frame_idx + 1) as f32 * time_per_frame;
 
-        for (bin, &power_db) in spectrum.iter().enumerate() {
-            // Calculate frequency directly from bin index
+        // Interpolate between frames for smoother transitions
+        for (bin, (&current_power, &next_power)) in current_spectrum
+            .iter()
+            .zip(next_spectrum.iter())
+            .enumerate()
+        {
             let freq_start = bin as f32 * freq_resolution;
-            let freq_end = freq_start + freq_step;
+            let freq_end = freq_start + freq_resolution;
 
-            // Only render frequencies within our range
+            if freq_start >= config.min_freq && freq_start <= config.max_freq {
+                // Linear interpolation of power values
+                let avg_power = (current_power + next_power) / 2.0;
+                let normalized_power = ((avg_power - MIN_DB) / (MAX_DB - MIN_DB)).max(0.0).min(1.0);
+
+                if normalized_power > 0.001 {
+                    let color = power_to_color(normalized_power);
+
+                    chart
+                        .draw_series(std::iter::once(Rectangle::new(
+                            [(time_start, freq_start), (time_end, freq_end)],
+                            color.filled(),
+                        )))
+                        .map_err(|e| SpectrogramError::InvalidInput(e.to_string()))?;
+                }
+            }
+        }
+    }
+
+    // Draw the last frame
+    if let Some(last_spectrum) = spectrogram_data.last() {
+        let last_frame_idx = spectrogram_data.len() - 1;
+        let time_start = last_frame_idx as f32 * time_per_frame;
+        let time_end = time_start + time_per_frame;
+
+        for (bin, &power_db) in last_spectrum.iter().enumerate() {
+            let freq_start = bin as f32 * freq_resolution;
+            let freq_end = freq_start + freq_resolution;
+
             if freq_start >= config.min_freq && freq_start <= config.max_freq {
                 let normalized_power = ((power_db - MIN_DB) / (MAX_DB - MIN_DB)).max(0.0).min(1.0);
 
-                // Render all power levels for complete coverage
                 if normalized_power > 0.001 {
                     let color = power_to_color(normalized_power);
 
