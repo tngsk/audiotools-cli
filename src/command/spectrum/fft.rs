@@ -81,12 +81,25 @@ impl FFTProcessor {
                 let complex = &fft_output[bin];
                 let magnitude = complex.norm() / self.config.window_size as f32;
 
-                // Improved magnitude scaling with window compensation
-                let window_compensation = 2.0; // Compensate for Hanning window energy loss
+                // Adaptive window compensation based on window size
+                // Smaller windows need less compensation to avoid saturation
+                let window_compensation = if self.config.window_size <= 256 {
+                    1.5 // Less compensation for very small windows
+                } else if self.config.window_size <= 512 {
+                    1.75 // Moderate compensation for small windows
+                } else {
+                    2.0 // Full compensation for larger windows
+                };
                 let adjusted_magnitude = magnitude * window_compensation;
 
-                // Convert to dB with better dynamic range
-                let db_value = 20.0 * adjusted_magnitude.max(1e-12).log10().max(-120.0);
+                // Convert to dB with adjusted scaling for small windows
+                // Use gentler scaling for small windows to prevent saturation
+                let db_scale = if self.config.window_size <= 256 {
+                    10.0 // Gentler scaling for small windows
+                } else {
+                    20.0 // Standard scaling for larger windows
+                };
+                let db_value = db_scale * adjusted_magnitude.max(1e-12).log10().max(-120.0);
                 spectrum.push(db_value);
             } else {
                 spectrum.push(-120.0);

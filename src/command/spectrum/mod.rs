@@ -19,8 +19,6 @@ use std::path::PathBuf;
 // Constants
 const FONT_FAMILY: &str = "Fira Code";
 const BACKGROUND_COLOR: RGBColor = RGBColor(4, 20, 36);
-const MIN_DB: f32 = -120.0;
-const MAX_DB: f32 = 0.0;
 
 /// Parse frequency annotation string (freq:label)
 pub fn parse_frequency_annotation(s: &str) -> Result<(f32, String)> {
@@ -375,6 +373,15 @@ fn draw_spectrogram_data(
 ) -> Result<()> {
     let freq_resolution = config.freq_resolution();
 
+    // Adaptive dB range based on window size to prevent saturation
+    let (min_db, max_db) = if config.window_size <= 256 {
+        (-90.0, -10.0) // Adjusted range for small windows
+    } else if config.window_size <= 512 {
+        (-100.0, -5.0) // Intermediate range
+    } else {
+        (-120.0, 0.0) // Standard range for large windows
+    };
+
     // For very short analysis with many frames, use interpolated rendering
     let use_interpolation = analysis_duration_ms < 300.0 && spectrogram_data.len() > 30;
 
@@ -410,7 +417,7 @@ fn draw_spectrogram_data(
                 // Only render frequencies within our range
                 if freq_start >= config.min_freq && freq_start <= config.max_freq {
                     let normalized_power =
-                        ((power_db - MIN_DB) / (MAX_DB - MIN_DB)).max(0.0).min(1.0);
+                        ((power_db - min_db) / (max_db - min_db)).max(0.0).min(1.0);
 
                     // Render all power levels for complete coverage
                     if normalized_power > 0.001 {
@@ -504,7 +511,16 @@ fn draw_interpolated_spectrogram(
                         current_spectrum[bin] * (1.0 - t) + next_spectrum[bin] * t
                     };
 
-                    let normalized_power = ((power - MIN_DB) / (MAX_DB - MIN_DB)).max(0.0).min(1.0);
+                    // Get adaptive dB range for normalization
+                    let (min_db, max_db) = if config.window_size <= 256 {
+                        (-90.0, -10.0)
+                    } else if config.window_size <= 512 {
+                        (-100.0, -5.0)
+                    } else {
+                        (-120.0, 0.0)
+                    };
+
+                    let normalized_power = ((power - min_db) / (max_db - min_db)).max(0.0).min(1.0);
 
                     if normalized_power > 0.001 {
                         let color = power_to_color(normalized_power);
@@ -532,7 +548,15 @@ fn draw_interpolated_spectrogram(
             let freq_end = freq_start + freq_resolution;
 
             if freq_start >= config.min_freq && freq_start <= config.max_freq {
-                let normalized_power = ((power_db - MIN_DB) / (MAX_DB - MIN_DB)).max(0.0).min(1.0);
+                // Use same adaptive dB range as main rendering
+                let (min_db, max_db) = if config.window_size <= 256 {
+                    (-90.0, -10.0)
+                } else if config.window_size <= 512 {
+                    (-100.0, -5.0)
+                } else {
+                    (-120.0, 0.0)
+                };
+                let normalized_power = ((power_db - min_db) / (max_db - min_db)).max(0.0).min(1.0);
 
                 if normalized_power > 0.001 {
                     let color = power_to_color(normalized_power);
@@ -555,27 +579,31 @@ fn draw_interpolated_spectrogram(
 fn power_to_color(normalized_power: f32) -> RGBColor {
     let power = normalized_power.max(0.0).min(1.0);
 
-    // Improved smooth heat map with better contrast
-    if power < 0.1 {
-        // Very low power - dark blue to black
-        let ratio = power * 10.0;
-        RGBColor(0, 0, (64.0 * ratio) as u8)
-    } else if power < 0.4 {
-        // Low power - blue to cyan
-        let ratio = (power - 0.1) / 0.3;
-        RGBColor(0, (128.0 * ratio) as u8, 64 + (191.0 * ratio) as u8)
-    } else if power < 0.7 {
-        // Medium power - cyan to yellow
-        let ratio = (power - 0.4) / 0.3;
+    // Adjusted color mapping with better distribution for small windows
+    if power < 0.05 {
+        // Very low power - black to dark blue (expanded range)
+        let ratio = power * 20.0;
+        RGBColor(0, 0, (32.0 * ratio) as u8)
+    } else if power < 0.2 {
+        // Low power - dark blue to blue (expanded range)
+        let ratio = (power - 0.05) / 0.15;
+        RGBColor(0, (64.0 * ratio) as u8, 32 + (96.0 * ratio) as u8)
+    } else if power < 0.5 {
+        // Medium-low power - blue to cyan
+        let ratio = (power - 0.2) / 0.3;
+        RGBColor(0, 64 + (128.0 * ratio) as u8, 128 + (127.0 * ratio) as u8)
+    } else if power < 0.8 {
+        // Medium-high power - cyan to yellow
+        let ratio = (power - 0.5) / 0.3;
         RGBColor(
             (255.0 * ratio) as u8,
-            128 + (127.0 * ratio) as u8,
-            (255.0 * (1.0 - ratio)) as u8,
+            192 + (63.0 * ratio) as u8,
+            255 - (255.0 * ratio) as u8,
         )
     } else {
-        // High power - yellow to white
-        let ratio = (power - 0.7) / 0.3;
-        RGBColor(255, 255, (255.0 * ratio) as u8)
+        // High power - yellow to white (compressed range)
+        let ratio = (power - 0.8) / 0.2;
+        RGBColor(255, 255, (128.0 + 127.0 * ratio) as u8)
     }
 }
 
@@ -632,14 +660,14 @@ mod tests {
     #[test]
     fn test_power_to_color() {
         let very_low = power_to_color(0.0);
-        let low = power_to_color(0.4);
-        let medium = power_to_color(0.7);
+        let low = power_to_color(0.2);
+        let medium = power_to_color(0.5);
         let high = power_to_color(1.0);
 
-        // Test the new smooth color mapping
-        assert_eq!(very_low, RGBColor(0, 0, 0)); // Dark blue/black for very low power
-        assert_eq!(low, RGBColor(0, 128, 255)); // Cyan for low power
-        assert_eq!(medium, RGBColor(255, 255, 0)); // Yellow for medium power
+        // Test the adjusted color mapping with better distribution
+        assert_eq!(very_low, RGBColor(0, 0, 0)); // Black for very low power
+        assert_eq!(low, RGBColor(0, 64, 128)); // Blue for low power
+        assert_eq!(medium, RGBColor(0, 192, 255)); // Cyan for medium power
         assert_eq!(high, RGBColor(255, 255, 255)); // White for high power
     }
 
