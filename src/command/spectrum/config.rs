@@ -129,8 +129,9 @@ impl SpectrogramConfig {
 
     /// Create configuration optimized for short audio
     ///
-    /// This method is automatically used when the analysis duration (considering --start/--end)
-    /// is less than 500ms, regardless of the total file duration.
+    /// This method is used when window_size is set to 0 (auto-configure mode)
+    /// and the analysis duration is short. When window_size is explicitly specified,
+    /// that value is always used regardless of audio duration.
     ///
     /// # Examples
     ///
@@ -196,6 +197,10 @@ impl SpectrogramConfig {
     }
 
     /// Create configuration from legacy parameters with optional duration hint
+    ///
+    /// When window_size is explicitly specified (non-zero), it will be used
+    /// regardless of the duration_ms hint. The duration is only used to
+    /// determine the appropriate hop_size for better time resolution.
     pub fn from_legacy_params_with_duration(
         window_size: usize,
         _overlap: f32, // Ignored - use adaptive hop_size
@@ -250,6 +255,9 @@ impl SpectrogramConfig {
     ///
     /// Automatically selects optimal parameters based on analysis duration.
     /// This is used when --window-size is set to 0 or --adaptive flag is used.
+    ///
+    /// Note: When window_size is explicitly specified (non-zero), that value
+    /// will be used instead of auto-configuration, regardless of duration.
     ///
     /// # Examples
     ///

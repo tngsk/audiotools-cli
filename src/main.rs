@@ -348,14 +348,11 @@ fn main() {
                 (min_freq, max_freq)
             };
 
-            if adaptive || window_size == 0 {
-                spectrum::create_spectrograms_adaptive(
+            if adaptive {
+                // When --adaptive flag is used, auto-configure based on duration
+                spectrum::create_spectrograms(
                     &input,
-                    if window_size == 0 {
-                        None
-                    } else {
-                        Some(window_size)
-                    },
+                    0, // 0 means auto-configure
                     overlap,
                     final_min_freq,
                     final_max_freq,
@@ -365,6 +362,7 @@ fn main() {
                     annotations,
                 );
             } else {
+                // Use specified window_size (0 means auto-configure)
                 spectrum::create_spectrograms(
                     &input,
                     window_size,

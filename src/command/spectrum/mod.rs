@@ -43,57 +43,6 @@ pub fn get_frequency_preset(preset: FrequencyPreset, sample_rate: f32) -> (f32, 
     SpectrogramConfig::frequency_preset(preset, sample_rate)
 }
 
-/// Create spectrograms for multiple files with adaptive settings
-pub fn create_spectrograms_adaptive(
-    input: &PathBuf,
-    window_size: Option<usize>,
-    overlap: f32,
-    min_freq: f32,
-    max_freq: f32,
-    time_range: Option<TimeRange>,
-    auto_start: Option<AutoStartDetection>,
-    recursive: bool,
-    annotations: Option<Vec<(f32, String)>>,
-) -> Vec<PathBuf> {
-    let mut output_files = Vec::new();
-    let effective_window_size = window_size.unwrap_or(0); // 0 means auto-configure
-
-    for entry in get_walker(input, recursive) {
-        if let Some(ext) = entry.path().extension() {
-            if ext.to_string_lossy().to_lowercase() == "wav" {
-                let input_path = PathBuf::from(entry.path());
-                let output_path = input_path.with_extension("png");
-
-                match create_spectrogram(
-                    &input_path,
-                    &output_path,
-                    effective_window_size,
-                    overlap,
-                    min_freq,
-                    max_freq,
-                    time_range.clone(),
-                    auto_start.clone(),
-                    annotations.clone(),
-                ) {
-                    Ok(_) => {
-                        println!(
-                            "Created spectrogram: {} -> {}",
-                            input_path.display(),
-                            output_path.display()
-                        );
-                        output_files.push(output_path);
-                    }
-                    Err(e) => {
-                        eprintln!("Error processing {}: {}", input_path.display(), e);
-                    }
-                }
-            }
-        }
-    }
-
-    output_files
-}
-
 /// Create spectrograms for multiple files (legacy API)
 pub fn create_spectrograms(
     input: &PathBuf,
@@ -174,37 +123,37 @@ pub fn create_spectrogram(
     let analysis_duration_ms = analysis_duration * 1000.0;
 
     // Determine if we should use adaptive configuration based on actual analysis duration
-    let config = if window_size == 0 {
+    let (config, mode_description) = if window_size == 0 {
         // Auto-configure based on actual analysis duration
-        SpectrogramConfig::auto_configure(
+        let cfg = SpectrogramConfig::auto_configure(
             audio_data.sample_rate,
             min_freq,
             max_freq,
             analysis_duration_ms,
-        )?
-    } else if analysis_duration_ms < 500.0 {
-        // For short analysis duration, use optimized configuration
-        SpectrogramConfig::for_short_audio(
-            audio_data.sample_rate,
-            min_freq,
-            max_freq,
-            analysis_duration_ms,
-        )?
+        )?;
+        (cfg, "auto-configured")
     } else {
-        // Use legacy configuration with analysis duration hint
-        SpectrogramConfig::from_legacy_params_with_duration(
+        // Use explicitly specified window size, regardless of duration
+        let cfg = SpectrogramConfig::from_legacy_params_with_duration(
             window_size,
             overlap,
             min_freq,
             max_freq,
             audio_data.sample_rate,
             Some(analysis_duration_ms),
-        )?
+        )?;
+        (cfg, "user-specified")
     };
 
     println!(
-        "Analysis duration: {:.1}ms ({}s to {}s), using window_size: {}, hop_size: {}",
-        analysis_duration_ms, start_time, end_time, config.window_size, config.hop_size
+        "Analysis: {:.1}ms ({:.3}s to {:.3}s) | Mode: {} | Window: {} | Hop: {} | Overlap: {:.1}%",
+        analysis_duration_ms,
+        start_time,
+        end_time,
+        mode_description,
+        config.window_size,
+        config.hop_size,
+        (1.0 - (config.hop_size as f32 / config.window_size as f32)) * 100.0
     );
 
     // Extract sample range
