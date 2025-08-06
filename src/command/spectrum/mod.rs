@@ -163,11 +163,14 @@ pub fn create_spectrogram(
 
     // Generate spectrogram with padding for short audio
     let fft_processor = FFTProcessor::new(config.clone());
-    let spectrogram_data = if analysis_duration_ms < 200.0 {
-        // Add zero padding for very short analysis (20% padding)
+    let spectrogram_data = if analysis_duration_ms < 150.0 {
+        // Add substantial padding for very short analysis (30% padding)
+        fft_processor.process_signal_with_padding(samples, 0.3)?
+    } else if analysis_duration_ms < 300.0 {
+        // Add moderate padding for short analysis (20% padding)
         fft_processor.process_signal_with_padding(samples, 0.2)?
     } else if analysis_duration_ms < 500.0 {
-        // Add light padding for short analysis (10% padding)
+        // Add light padding for medium-short analysis (10% padding)
         fft_processor.process_signal_with_padding(samples, 0.1)?
     } else {
         // No padding for longer analysis
@@ -373,7 +376,7 @@ fn draw_spectrogram_data(
     let freq_resolution = config.freq_resolution();
 
     // For very short analysis with many frames, use interpolated rendering
-    let use_interpolation = analysis_duration_ms < 200.0 && spectrogram_data.len() > 50;
+    let use_interpolation = analysis_duration_ms < 300.0 && spectrogram_data.len() > 30;
 
     // Use exact steps without artificial overlap to prevent gaps and artifacts
     let time_step = if use_interpolation {
@@ -441,37 +444,78 @@ fn draw_interpolated_spectrogram(
 ) -> Result<()> {
     let freq_resolution = config.freq_resolution();
 
-    // Render with interpolation between frames
-    for frame_idx in 0..spectrogram_data.len() - 1 {
+    // Render with cubic interpolation between frames for ultra-smooth transitions
+    let num_frames = spectrogram_data.len();
+    let interpolation_steps = 3; // Number of interpolated points between frames
+
+    for frame_idx in 0..num_frames - 1 {
         let current_spectrum = &spectrogram_data[frame_idx];
         let next_spectrum = &spectrogram_data[frame_idx + 1];
 
-        let time_start = frame_idx as f32 * time_per_frame;
-        let time_end = (frame_idx + 1) as f32 * time_per_frame;
+        // Get previous and next-next frames for cubic interpolation (if available)
+        let prev_spectrum = if frame_idx > 0 {
+            Some(&spectrogram_data[frame_idx - 1])
+        } else {
+            None
+        };
+        let next_next_spectrum = if frame_idx + 2 < num_frames {
+            Some(&spectrogram_data[frame_idx + 2])
+        } else {
+            None
+        };
 
-        // Interpolate between frames for smoother transitions
-        for (bin, (&current_power, &next_power)) in current_spectrum
-            .iter()
-            .zip(next_spectrum.iter())
-            .enumerate()
-        {
-            let freq_start = bin as f32 * freq_resolution;
-            let freq_end = freq_start + freq_resolution;
+        // Create multiple interpolated frames between current and next
+        for interp_step in 0..=interpolation_steps {
+            let t = interp_step as f32 / interpolation_steps as f32;
+            let time_pos = (frame_idx as f32 + t) * time_per_frame;
+            let time_next = ((frame_idx as f32 + t) + (1.0 / interpolation_steps as f32))
+                .min((num_frames - 1) as f32)
+                * time_per_frame;
 
-            if freq_start >= config.min_freq && freq_start <= config.max_freq {
-                // Linear interpolation of power values
-                let avg_power = (current_power + next_power) / 2.0;
-                let normalized_power = ((avg_power - MIN_DB) / (MAX_DB - MIN_DB)).max(0.0).min(1.0);
+            for bin in 0..current_spectrum.len().min(next_spectrum.len()) {
+                let freq_start = bin as f32 * freq_resolution;
+                let freq_end = freq_start + freq_resolution;
 
-                if normalized_power > 0.001 {
-                    let color = power_to_color(normalized_power);
+                if freq_start >= config.min_freq && freq_start <= config.max_freq {
+                    // Cubic interpolation for smoother transitions
+                    let power = if let (Some(prev), Some(next_next)) =
+                        (prev_spectrum, next_next_spectrum)
+                    {
+                        if bin < prev.len() && bin < next_next.len() {
+                            // Catmull-Rom cubic interpolation
+                            let p0 = prev[bin];
+                            let p1 = current_spectrum[bin];
+                            let p2 = next_spectrum[bin];
+                            let p3 = next_next[bin];
 
-                    chart
-                        .draw_series(std::iter::once(Rectangle::new(
-                            [(time_start, freq_start), (time_end, freq_end)],
-                            color.filled(),
-                        )))
-                        .map_err(|e| SpectrogramError::InvalidInput(e.to_string()))?;
+                            let t2 = t * t;
+                            let t3 = t2 * t;
+
+                            0.5 * ((2.0 * p1)
+                                + (-p0 + p2) * t
+                                + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2
+                                + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3)
+                        } else {
+                            // Fallback to linear interpolation
+                            current_spectrum[bin] * (1.0 - t) + next_spectrum[bin] * t
+                        }
+                    } else {
+                        // Linear interpolation at boundaries
+                        current_spectrum[bin] * (1.0 - t) + next_spectrum[bin] * t
+                    };
+
+                    let normalized_power = ((power - MIN_DB) / (MAX_DB - MIN_DB)).max(0.0).min(1.0);
+
+                    if normalized_power > 0.001 {
+                        let color = power_to_color(normalized_power);
+
+                        chart
+                            .draw_series(std::iter::once(Rectangle::new(
+                                [(time_pos, freq_start), (time_next, freq_end)],
+                                color.filled(),
+                            )))
+                            .map_err(|e| SpectrogramError::InvalidInput(e.to_string()))?;
+                    }
                 }
             }
         }
@@ -637,6 +681,6 @@ mod tests {
                 .unwrap();
 
         assert_eq!(config.window_size, 256); // Should use small window for 100ms
-        assert_eq!(config.hop_size, 12); // 95% overlap for very short duration
+        assert_eq!(config.hop_size, 7); // 97% overlap for very short duration
     }
 }

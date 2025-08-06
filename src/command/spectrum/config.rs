@@ -85,7 +85,7 @@ impl SpectrogramConfig {
     /// ```
     pub fn calculate_optimal_window_size(duration_ms: f32, _sample_rate: f32) -> usize {
         // Adaptive window size selection based on duration
-        let window_size = if duration_ms < 100.0 {
+        let window_size = if duration_ms < 150.0 {
             256 // Very short audio - prioritize time resolution
         } else if duration_ms < 500.0 {
             512 // Short audio
@@ -100,7 +100,7 @@ impl SpectrogramConfig {
 
     /// Get duration preset from audio duration
     pub fn get_duration_preset(duration_ms: f32) -> DurationPreset {
-        if duration_ms < 100.0 {
+        if duration_ms < 150.0 {
             DurationPreset::VeryShort
         } else if duration_ms < 500.0 {
             DurationPreset::Short
@@ -117,8 +117,8 @@ impl SpectrogramConfig {
         duration_preset: DurationPreset,
     ) -> usize {
         let overlap_ratio = match duration_preset {
-            DurationPreset::VeryShort => 0.95, // 95% overlap for very short audio
-            DurationPreset::Short => 0.90,     // 90% overlap for short audio
+            DurationPreset::VeryShort => 0.97, // 97% overlap for very short audio
+            DurationPreset::Short => 0.93,     // 93% overlap for short audio
             DurationPreset::Medium => 0.875,   // 87.5% overlap for medium audio
             DurationPreset::Long => 0.75,      // 75% overlap for long audio
         };
@@ -476,11 +476,11 @@ mod tests {
     fn test_short_audio_config() {
         let config = SpectrogramConfig::for_short_audio(44100.0, 20.0, 20000.0, 80.0).unwrap();
         assert_eq!(config.window_size, 256);
-        assert_eq!(config.hop_size, 12); // 95% overlap for very short audio
+        assert_eq!(config.hop_size, 7); // 97% overlap for very short audio
 
         let config2 = SpectrogramConfig::for_short_audio(44100.0, 20.0, 20000.0, 300.0).unwrap();
         assert_eq!(config2.window_size, 512);
-        assert_eq!(config2.hop_size, 51); // 90% overlap for short audio
+        assert_eq!(config2.hop_size, 35); // 93% overlap for short audio
     }
 
     #[test]

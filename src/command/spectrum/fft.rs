@@ -292,6 +292,7 @@ mod tests {
 
         // Should use small window size for short audio
         assert_eq!(config.window_size, 256);
+        assert_eq!(config.hop_size, 7); // 97% overlap for very short duration
 
         let processor = FFTProcessor::new(config);
         let samples = generate_sine_wave(440.0, duration, sample_rate); // A4 note
