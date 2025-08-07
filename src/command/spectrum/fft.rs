@@ -92,14 +92,8 @@ impl FFTProcessor {
                 };
                 let adjusted_magnitude = magnitude * window_compensation;
 
-                // Convert to dB with adjusted scaling for small windows
-                // Use gentler scaling for small windows to prevent saturation
-                let db_scale = if self.config.window_size <= 256 {
-                    10.0 // Gentler scaling for small windows
-                } else {
-                    20.0 // Standard scaling for larger windows
-                };
-                let db_value = db_scale * adjusted_magnitude.max(1e-12).log10().max(-120.0);
+                // Convert to dB with standard scaling for all window sizes
+                let db_value = 20.0 * adjusted_magnitude.max(1e-12).log10().max(-120.0);
                 spectrum.push(db_value);
             } else {
                 spectrum.push(-120.0);
