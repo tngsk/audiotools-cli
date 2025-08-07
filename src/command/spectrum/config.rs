@@ -84,30 +84,21 @@ impl SpectrogramConfig {
     /// assert_eq!(window_size, 256); // Still uses small window for short analysis
     /// ```
     pub fn calculate_optimal_window_size(duration_ms: f32, _sample_rate: f32) -> usize {
-        // Adaptive window size selection based on duration
-        let window_size = if duration_ms < 150.0 {
-            256 // Very short audio - prioritize time resolution
-        } else if duration_ms < 500.0 {
-            512 // Short audio
-        } else if duration_ms < 2000.0 {
-            1024 // Medium audio
-        } else {
-            2048 // Long audio - prioritize frequency resolution
-        };
-
-        window_size
+        match duration_ms {
+            d if d < 150.0 => 256,   // Very short - prioritize time resolution
+            d if d < 500.0 => 512,   // Short audio
+            d if d < 2000.0 => 1024, // Medium audio
+            _ => 2048,               // Long - prioritize frequency resolution
+        }
     }
 
     /// Get duration preset from audio duration
     pub fn get_duration_preset(duration_ms: f32) -> DurationPreset {
-        if duration_ms < 150.0 {
-            DurationPreset::VeryShort
-        } else if duration_ms < 500.0 {
-            DurationPreset::Short
-        } else if duration_ms < 2000.0 {
-            DurationPreset::Medium
-        } else {
-            DurationPreset::Long
+        match duration_ms {
+            d if d < 150.0 => DurationPreset::VeryShort,
+            d if d < 500.0 => DurationPreset::Short,
+            d if d < 2000.0 => DurationPreset::Medium,
+            _ => DurationPreset::Long,
         }
     }
 
@@ -117,14 +108,12 @@ impl SpectrogramConfig {
         duration_preset: DurationPreset,
     ) -> usize {
         let overlap_ratio = match duration_preset {
-            DurationPreset::VeryShort => 0.97, // 97% overlap for very short audio
-            DurationPreset::Short => 0.93,     // 93% overlap for short audio
-            DurationPreset::Medium => 0.875,   // 87.5% overlap for medium audio
-            DurationPreset::Long => 0.75,      // 75% overlap for long audio
+            DurationPreset::VeryShort => 0.97,
+            DurationPreset::Short => 0.93,
+            DurationPreset::Medium => 0.875,
+            DurationPreset::Long => 0.75,
         };
-
-        let hop_size = (window_size as f32 * (1.0 - overlap_ratio)) as usize;
-        hop_size.max(1)
+        ((window_size as f32 * (1.0 - overlap_ratio)) as usize).max(1)
     }
 
     /// Create configuration optimized for short audio
@@ -153,22 +142,12 @@ impl SpectrogramConfig {
         duration_ms: f32,
     ) -> Result<Self, ConfigError> {
         let window_size = Self::calculate_optimal_window_size(duration_ms, sample_rate);
-        let duration_preset = Self::get_duration_preset(duration_ms);
-        let hop_size = Self::calculate_hop_size_for_short_audio(window_size, duration_preset);
-
-        let mut config = Self {
+        let hop_size = Self::calculate_hop_size_for_short_audio(
             window_size,
-            hop_size,
-            sample_rate,
-            min_freq,
-            max_freq,
-            image_width: 1200,
-            image_height: 600,
-            window_type: WindowType::Hanning,
-        };
+            Self::get_duration_preset(duration_ms),
+        );
 
-        config.validate()?;
-        Ok(config)
+        Self::new_with_params(window_size, hop_size, sample_rate, min_freq, max_freq)
     }
 
     /// Create a new configuration with manual parameters
@@ -209,28 +188,13 @@ impl SpectrogramConfig {
         sample_rate: f32,
         duration_ms: Option<f32>,
     ) -> Result<Self, ConfigError> {
-        // Use adaptive hop_size based on duration if provided
-        let hop_size = if let Some(duration) = duration_ms {
-            let duration_preset = Self::get_duration_preset(duration);
-            Self::calculate_hop_size_for_short_audio(window_size, duration_preset)
-        } else {
-            // Default to high-resolution hop_size (87.5% overlap)
-            (window_size / 8).max(1)
-        };
+        let hop_size = duration_ms
+            .map(|d| {
+                Self::calculate_hop_size_for_short_audio(window_size, Self::get_duration_preset(d))
+            })
+            .unwrap_or_else(|| (window_size / 8).max(1));
 
-        let mut config = Self {
-            window_size,
-            hop_size,
-            sample_rate,
-            min_freq,
-            max_freq,
-            image_width: 1200,
-            image_height: 600,
-            window_type: WindowType::Hanning,
-        };
-
-        config.validate()?;
-        Ok(config)
+        Self::new_with_params(window_size, hop_size, sample_rate, min_freq, max_freq)
     }
 
     /// Create configuration from legacy parameters
@@ -276,10 +240,17 @@ impl SpectrogramConfig {
         max_freq: f32,
         duration_ms: f32,
     ) -> Result<Self, ConfigError> {
-        let window_size = Self::calculate_optimal_window_size(duration_ms, sample_rate);
-        let duration_preset = Self::get_duration_preset(duration_ms);
-        let hop_size = Self::calculate_hop_size_for_short_audio(window_size, duration_preset);
+        Self::for_short_audio(sample_rate, min_freq, max_freq, duration_ms)
+    }
 
+    /// Helper to create config with validation
+    fn new_with_params(
+        window_size: usize,
+        hop_size: usize,
+        sample_rate: f32,
+        min_freq: f32,
+        max_freq: f32,
+    ) -> Result<Self, ConfigError> {
         let mut config = Self {
             window_size,
             hop_size,
@@ -290,7 +261,6 @@ impl SpectrogramConfig {
             image_height: 600,
             window_type: WindowType::Hanning,
         };
-
         config.validate()?;
         Ok(config)
     }

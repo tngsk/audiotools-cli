@@ -70,34 +70,24 @@ impl FFTProcessor {
 
     /// Compute magnitude spectrum from FFT output with proper frequency mapping
     fn compute_magnitude_spectrum(&self, fft_output: &[Complex<f32>]) -> Vec<f32> {
-        let _freq_resolution = self.config.freq_resolution();
-
-        // Process all frequency bins and let the renderer handle frequency filtering
-        // This maintains correct bin-to-frequency mapping
         let mut spectrum = Vec::with_capacity(self.config.freq_bins());
 
+        // Adaptive window compensation based on window size
+        let window_compensation = match self.config.window_size {
+            w if w <= 256 => 1.5,
+            w if w <= 512 => 1.75,
+            _ => 2.0,
+        };
+
         for bin in 0..self.config.freq_bins() {
-            if bin < fft_output.len() {
-                let complex = &fft_output[bin];
-                let magnitude = complex.norm() / self.config.window_size as f32;
-
-                // Adaptive window compensation based on window size
-                // Smaller windows need less compensation to avoid saturation
-                let window_compensation = if self.config.window_size <= 256 {
-                    1.5 // Less compensation for very small windows
-                } else if self.config.window_size <= 512 {
-                    1.75 // Moderate compensation for small windows
-                } else {
-                    2.0 // Full compensation for larger windows
-                };
-                let adjusted_magnitude = magnitude * window_compensation;
-
-                // Convert to dB with standard scaling for all window sizes
-                let db_value = 20.0 * adjusted_magnitude.max(1e-12).log10().max(-120.0);
-                spectrum.push(db_value);
+            let db_value = if bin < fft_output.len() {
+                let magnitude = fft_output[bin].norm() / self.config.window_size as f32;
+                let adjusted = magnitude * window_compensation;
+                20.0 * adjusted.max(1e-12).log10().max(-120.0)
             } else {
-                spectrum.push(-120.0);
-            }
+                -120.0
+            };
+            spectrum.push(db_value);
         }
 
         spectrum

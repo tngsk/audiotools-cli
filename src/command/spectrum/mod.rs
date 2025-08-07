@@ -372,17 +372,7 @@ fn draw_spectrogram_data(
     analysis_duration_ms: f32,
 ) -> Result<()> {
     let freq_resolution = config.freq_resolution();
-
-    // Adaptive dB range based on window size to prevent saturation
-    let (min_db, max_db) = if config.window_size <= 256 {
-        (-90.0, -10.0) // Adjusted range for small windows
-    } else if config.window_size <= 512 {
-        (-100.0, -5.0) // Intermediate range
-    } else {
-        (-120.0, 0.0) // Standard range for large windows
-    };
-
-    // For very short analysis with many frames, use interpolated rendering
+    let (min_db, max_db) = get_adaptive_db_range(config.window_size);
     let use_interpolation = analysis_duration_ms < 300.0 && spectrogram_data.len() > 30;
 
     // Use exact steps without artificial overlap to prevent gaps and artifacts
@@ -450,121 +440,54 @@ fn draw_interpolated_spectrogram(
     _analysis_duration_ms: f32,
 ) -> Result<()> {
     let freq_resolution = config.freq_resolution();
+    let (min_db, max_db) = get_adaptive_db_range(config.window_size);
 
-    // Render with cubic interpolation between frames for ultra-smooth transitions
-    let num_frames = spectrogram_data.len();
-    let interpolation_steps = 3; // Number of interpolated points between frames
+    // Simple linear interpolation between frames
+    for (frame_idx, window) in spectrogram_data.windows(2).enumerate() {
+        let current = &window[0];
+        let next = &window[1];
 
-    for frame_idx in 0..num_frames - 1 {
-        let current_spectrum = &spectrogram_data[frame_idx];
-        let next_spectrum = &spectrogram_data[frame_idx + 1];
+        for step in 0..=2 {
+            let t = step as f32 / 2.0;
+            let time = (frame_idx as f32 + t) * time_per_frame;
+            let time_end = time + time_per_frame / 2.0;
 
-        // Get previous and next-next frames for cubic interpolation (if available)
-        let prev_spectrum = if frame_idx > 0 {
-            Some(&spectrogram_data[frame_idx - 1])
-        } else {
-            None
-        };
-        let next_next_spectrum = if frame_idx + 2 < num_frames {
-            Some(&spectrogram_data[frame_idx + 2])
-        } else {
-            None
-        };
+            for (bin, (&curr_power, &next_power)) in current.iter().zip(next.iter()).enumerate() {
+                let freq = bin as f32 * freq_resolution;
+                if freq < config.min_freq || freq > config.max_freq {
+                    continue;
+                }
 
-        // Create multiple interpolated frames between current and next
-        for interp_step in 0..=interpolation_steps {
-            let t = interp_step as f32 / interpolation_steps as f32;
-            let time_pos = (frame_idx as f32 + t) * time_per_frame;
-            let time_next = ((frame_idx as f32 + t) + (1.0 / interpolation_steps as f32))
-                .min((num_frames - 1) as f32)
-                * time_per_frame;
+                let power = curr_power + (next_power - curr_power) * t;
+                let normalized = ((power - min_db) / (max_db - min_db)).clamp(0.0, 1.0);
 
-            for bin in 0..current_spectrum.len().min(next_spectrum.len()) {
-                let freq_start = bin as f32 * freq_resolution;
-                let freq_end = freq_start + freq_resolution;
-
-                if freq_start >= config.min_freq && freq_start <= config.max_freq {
-                    // Cubic interpolation for smoother transitions
-                    let power = if let (Some(prev), Some(next_next)) =
-                        (prev_spectrum, next_next_spectrum)
-                    {
-                        if bin < prev.len() && bin < next_next.len() {
-                            // Catmull-Rom cubic interpolation
-                            let p0 = prev[bin];
-                            let p1 = current_spectrum[bin];
-                            let p2 = next_spectrum[bin];
-                            let p3 = next_next[bin];
-
-                            let t2 = t * t;
-                            let t3 = t2 * t;
-
-                            0.5 * ((2.0 * p1)
-                                + (-p0 + p2) * t
-                                + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2
-                                + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3)
-                        } else {
-                            // Fallback to linear interpolation
-                            current_spectrum[bin] * (1.0 - t) + next_spectrum[bin] * t
-                        }
-                    } else {
-                        // Linear interpolation at boundaries
-                        current_spectrum[bin] * (1.0 - t) + next_spectrum[bin] * t
-                    };
-
-                    // Get adaptive dB range for normalization
-                    let (min_db, max_db) = if config.window_size <= 256 {
-                        (-90.0, -10.0)
-                    } else if config.window_size <= 512 {
-                        (-100.0, -5.0)
-                    } else {
-                        (-120.0, 0.0)
-                    };
-
-                    let normalized_power = ((power - min_db) / (max_db - min_db)).max(0.0).min(1.0);
-
-                    if normalized_power > 0.001 {
-                        let color = power_to_color(normalized_power);
-
-                        chart
-                            .draw_series(std::iter::once(Rectangle::new(
-                                [(time_pos, freq_start), (time_next, freq_end)],
-                                color.filled(),
-                            )))
-                            .map_err(|e| SpectrogramError::InvalidInput(e.to_string()))?;
-                    }
+                if normalized > 0.001 {
+                    chart
+                        .draw_series(std::iter::once(Rectangle::new(
+                            [(time, freq), (time_end, freq + freq_resolution)],
+                            power_to_color(normalized).filled(),
+                        )))
+                        .map_err(|e| SpectrogramError::InvalidInput(e.to_string()))?;
                 }
             }
         }
     }
 
-    // Draw the last frame
-    if let Some(last_spectrum) = spectrogram_data.last() {
-        let last_frame_idx = spectrogram_data.len() - 1;
-        let time_start = last_frame_idx as f32 * time_per_frame;
-        let time_end = time_start + time_per_frame;
-
-        for (bin, &power_db) in last_spectrum.iter().enumerate() {
-            let freq_start = bin as f32 * freq_resolution;
-            let freq_end = freq_start + freq_resolution;
-
-            if freq_start >= config.min_freq && freq_start <= config.max_freq {
-                // Use same adaptive dB range as main rendering
-                let (min_db, max_db) = if config.window_size <= 256 {
-                    (-90.0, -10.0)
-                } else if config.window_size <= 512 {
-                    (-100.0, -5.0)
-                } else {
-                    (-120.0, 0.0)
-                };
-                let normalized_power = ((power_db - min_db) / (max_db - min_db)).max(0.0).min(1.0);
-
-                if normalized_power > 0.001 {
-                    let color = power_to_color(normalized_power);
-
+    // Draw last frame
+    if let Some(last) = spectrogram_data.last() {
+        let time = (spectrogram_data.len() - 1) as f32 * time_per_frame;
+        for (bin, &power) in last.iter().enumerate() {
+            let freq = bin as f32 * freq_resolution;
+            if freq >= config.min_freq && freq <= config.max_freq {
+                let normalized = ((power - min_db) / (max_db - min_db)).clamp(0.0, 1.0);
+                if normalized > 0.001 {
                     chart
                         .draw_series(std::iter::once(Rectangle::new(
-                            [(time_start, freq_start), (time_end, freq_end)],
-                            color.filled(),
+                            [
+                                (time, freq),
+                                (time + time_per_frame, freq + freq_resolution),
+                            ],
+                            power_to_color(normalized).filled(),
                         )))
                         .map_err(|e| SpectrogramError::InvalidInput(e.to_string()))?;
                 }
@@ -575,36 +498,44 @@ fn draw_interpolated_spectrogram(
     Ok(())
 }
 
-/// Convert power value to color with improved smooth mapping
-fn power_to_color(normalized_power: f32) -> RGBColor {
-    let power = normalized_power.max(0.0).min(1.0);
-
-    // Adjusted color mapping with better distribution for small windows
-    if power < 0.05 {
-        // Very low power - black to dark blue (expanded range)
-        let ratio = power * 20.0;
-        RGBColor(0, 0, (32.0 * ratio) as u8)
-    } else if power < 0.2 {
-        // Low power - dark blue to blue (expanded range)
-        let ratio = (power - 0.05) / 0.15;
-        RGBColor(0, (64.0 * ratio) as u8, 32 + (96.0 * ratio) as u8)
-    } else if power < 0.5 {
-        // Medium-low power - blue to cyan
-        let ratio = (power - 0.2) / 0.3;
-        RGBColor(0, 64 + (128.0 * ratio) as u8, 128 + (127.0 * ratio) as u8)
-    } else if power < 0.8 {
-        // Medium-high power - cyan to yellow
-        let ratio = (power - 0.5) / 0.3;
-        RGBColor(
-            (255.0 * ratio) as u8,
-            192 + (63.0 * ratio) as u8,
-            255 - (255.0 * ratio) as u8,
-        )
-    } else {
-        // High power - yellow to white (compressed range)
-        let ratio = (power - 0.8) / 0.2;
-        RGBColor(255, 255, (128.0 + 127.0 * ratio) as u8)
+/// Get adaptive dB range based on window size
+fn get_adaptive_db_range(window_size: usize) -> (f32, f32) {
+    match window_size {
+        w if w <= 256 => (-90.0, -10.0),
+        w if w <= 512 => (-100.0, -5.0),
+        _ => (-120.0, 0.0),
     }
+}
+
+/// Convert power value to color with improved smooth mapping
+fn power_to_color(power: f32) -> RGBColor {
+    let p = power.clamp(0.0, 1.0);
+
+    let (r, g, b) = match p {
+        p if p < 0.05 => (0.0, 0.0, p * 640.0), // Black to dark blue
+        p if p < 0.2 => {
+            // Dark blue to blue
+            let t = (p - 0.05) / 0.15;
+            (0.0, t * 64.0, 32.0 + t * 96.0)
+        }
+        p if p < 0.5 => {
+            // Blue to cyan
+            let t = (p - 0.2) / 0.3;
+            (0.0, 64.0 + t * 128.0, 128.0 + t * 127.0)
+        }
+        p if p < 0.8 => {
+            // Cyan to yellow
+            let t = (p - 0.5) / 0.3;
+            (t * 255.0, 192.0 + t * 63.0, 255.0 * (1.0 - t))
+        }
+        _ => {
+            // Yellow to white
+            let t = (p - 0.8) / 0.2;
+            (255.0, 255.0, 128.0 + t * 127.0)
+        }
+    };
+
+    RGBColor(r as u8, g as u8, b as u8)
 }
 
 /// Draw frequency annotations
