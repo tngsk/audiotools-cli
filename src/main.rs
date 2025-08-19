@@ -3,12 +3,23 @@ use std::path::PathBuf;
 
 use audiotools::command::{
     convert, info, loudness, normalize,
-    spectrum::{self, parse_frequency_annotation, FrequencyPreset},
+    spectrum::{FrequencyPreset},
     waveform::{self, parse_time_annotation, WaveformScale},
 };
 
 use audiotools::utils::detection;
 use audiotools::utils::time::{self, TimeSpecification};
+
+// New imports for spectrum command
+use audiotools::command::spectrum::command::SpectrumCommand;
+use audiotools::command::spectrum::domain::request::{SpectrumRequest, SpectrumOptions};
+use audiotools::command::spectrum::command::SpectrumResponse;
+use audiotools::command::spectrum::core::audio::DefaultAudioLoader;
+use audiotools::command::spectrum::render::DefaultSpectrogramRenderer;
+use audiotools::command::spectrum::core::config::{SpectrogramConfig};
+use audiotools::command::spectrum::core::config::builder::ConfigBuilder;
+use audiotools::command::spectrum::domain::frequency::parse_frequency_annotation; // Import directly from new location
+use audiotools::command::spectrum::core::analysis::DefaultSpectralAnalyzer;
 
 // Define CLI application structure using clap
 #[derive(Parser)]
@@ -246,7 +257,8 @@ enum Commands {
 }
 
 // Main function: Parse CLI arguments and dispatch to appropriate handler
-fn main() {
+#[tokio::main]
+async fn main() {
     let cli = Cli::parse();
 
     match cli.command {
@@ -316,7 +328,7 @@ fn main() {
         Commands::Spectrum {
             input,
             window_size,
-            overlap,
+            overlap: _overlap, // Mark as ignored
             min_freq,
             max_freq,
             freq_preset,
@@ -338,42 +350,62 @@ fn main() {
                 min_duration,
             );
 
-            // Handle frequency preset override
-            let (final_min_freq, final_max_freq) = if let Some(preset) = freq_preset {
-                // For now, use a default sample rate for preset calculation
-                // In a real scenario, we would load the audio file first
+            // Build SpectrogramConfig using ConfigBuilder
+            let mut config_builder = ConfigBuilder::new()
+                .image_dimensions(1200, 600);
+
+            if let Some(preset) = freq_preset {
+                // Use a default sample rate for preset calculation, actual will be from audio file
                 let default_sample_rate = 44100.0;
-                spectrum::get_frequency_preset(preset.into(), default_sample_rate)
+                let (p_min, p_max) = SpectrogramConfig::frequency_preset(preset.into(), default_sample_rate);
+                config_builder = config_builder.frequency_range(p_min, p_max);
             } else {
-                (min_freq, max_freq)
+                config_builder = config_builder.frequency_range(min_freq, max_freq);
+            }
+
+            if window_size != 0 && !adaptive {
+                config_builder = config_builder.window_size(window_size);
+            } else if adaptive {
+                // When adaptive, window_size will be auto-configured based on duration
+                // The actual duration will be passed to auto_configure inside SpectrumCommand.execute
+                config_builder = config_builder.auto_configure(0.0); // Placeholder duration
+            }
+
+            let config = config_builder.build().expect("Failed to build spectrogram config");
+
+            let output_path = input.with_extension("png"); // Default output path
+
+            let request = SpectrumRequest {
+                input_path: input,
+                output_path,
+                config: config.clone(), // Clone config for the request
+                time_range,
+                auto_start: auto_start_config,
+                annotations,
+                options: SpectrumOptions, // Use direct import
             };
 
-            if adaptive {
-                // When --adaptive flag is used, auto-configure based on duration
-                spectrum::create_spectrograms(
-                    &input,
-                    0, // 0 means auto-configure
-                    overlap,
-                    final_min_freq,
-                    final_max_freq,
-                    time_range,
-                    auto_start_config,
-                    recursive,
-                    annotations,
-                );
+            let audio_loader = Box::new(DefaultAudioLoader);
+            let spectral_analyzer = Box::new(DefaultSpectralAnalyzer::new(config)); // Pass config to analyzer
+            let spectrogram_renderer = Box::new(DefaultSpectrogramRenderer);
+
+            let spectrum_command = SpectrumCommand::new(
+                audio_loader,
+                spectral_analyzer,
+                spectrogram_renderer,
+            );
+
+            // Handle recursive processing
+            if recursive {
+                // TODO: Implement batch processing for directories
+                eprintln!("Warning: Recursive processing for spectrum command is not yet fully implemented with the new architecture. Processing single file.");
+                if let Err(e) = spectrum_command.execute(request).await {
+                    eprintln!("Error creating spectrogram: {}", e);
+                }
             } else {
-                // Use specified window_size (0 means auto-configure)
-                spectrum::create_spectrograms(
-                    &input,
-                    window_size,
-                    overlap,
-                    final_min_freq,
-                    final_max_freq,
-                    time_range,
-                    auto_start_config,
-                    recursive,
-                    annotations,
-                );
+                if let Err(e) = spectrum_command.execute(request).await {
+                    eprintln!("Error creating spectrogram: {}", e);
+                }
             }
         }
         Commands::Waveform {
@@ -421,11 +453,11 @@ enum FrequencyPresetArg {
 impl From<FrequencyPresetArg> for FrequencyPreset {
     fn from(arg: FrequencyPresetArg) -> Self {
         match arg {
-            FrequencyPresetArg::Full => FrequencyPreset::Full,
-            FrequencyPresetArg::AudioRange => FrequencyPreset::AudioRange,
-            FrequencyPresetArg::SpeechRange => FrequencyPreset::SpeechRange,
-            FrequencyPresetArg::MusicRange => FrequencyPreset::MusicRange,
-            FrequencyPresetArg::Bass => FrequencyPreset::Bass,
+            FrequencyPresetArg::Full => audiotools::command::spectrum::core::config::FrequencyPreset::Full,
+            FrequencyPresetArg::AudioRange => audiotools::command::spectrum::core::config::FrequencyPreset::AudioRange,
+            FrequencyPresetArg::SpeechRange => audiotools::command::spectrum::core::config::FrequencyPreset::SpeechRange,
+            FrequencyPresetArg::MusicRange => audiotools::command::spectrum::core::config::FrequencyPreset::MusicRange,
+            FrequencyPresetArg::Bass => audiotools::command::spectrum::core::config::FrequencyPreset::Bass,
         }
     }
 }

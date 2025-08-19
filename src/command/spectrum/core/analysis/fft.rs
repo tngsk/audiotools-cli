@@ -1,23 +1,7 @@
-use crate::command::spectrum::config::SpectrogramConfig;
+use crate::command::spectrum::core::config::SpectrogramConfig;
 use rustfft::{num_complex::Complex, FftPlanner};
-use std::f32::consts::PI;
-
-#[derive(Debug)]
-pub enum FFTError {
-    InvalidBufferSize(String),
-    ProcessingError(String),
-}
-
-impl std::fmt::Display for FFTError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            FFTError::InvalidBufferSize(msg) => write!(f, "Invalid buffer size: {}", msg),
-            FFTError::ProcessingError(msg) => write!(f, "Processing error: {}", msg),
-        }
-    }
-}
-
-impl std::error::Error for FFTError {}
+use crate::command::spectrum::error::SpectrumError;
+use crate::command::spectrum::core::analysis::windowing;
 
 /// Simple FFT processor for spectrogram generation
 pub struct FFTProcessor {
@@ -28,24 +12,14 @@ pub struct FFTProcessor {
 impl FFTProcessor {
     /// Create a new FFT processor
     pub fn new(config: SpectrogramConfig) -> Self {
-        let window = Self::generate_hanning_window(config.window_size);
+        let window = windowing::generate_hanning_window(config.window_size);
         Self { config, window }
     }
 
-    /// Generate Hanning window
-    fn generate_hanning_window(size: usize) -> Vec<f32> {
-        (0..size)
-            .map(|i| {
-                let phase = 2.0 * PI * i as f32 / (size - 1) as f32;
-                0.5 * (1.0 - phase.cos())
-            })
-            .collect()
-    }
-
     /// Process a single frame of audio samples
-    pub fn process_frame(&self, samples: &[f32]) -> Result<Vec<f32>, FFTError> {
+    pub fn process_frame(&self, samples: &[f32]) -> Result<Vec<f32>, SpectrumError> {
         if samples.len() != self.config.window_size {
-            return Err(FFTError::InvalidBufferSize(format!(
+            return Err(SpectrumError::Analysis(format!(
                 "Expected {} samples, got {}",
                 self.config.window_size,
                 samples.len()
@@ -94,9 +68,9 @@ impl FFTProcessor {
     }
 
     /// Process entire audio signal and return spectrogram with high resolution
-    pub fn process_signal(&self, samples: &[f32]) -> Result<Vec<Vec<f32>>, FFTError> {
+    pub fn process_signal(&self, samples: &[f32]) -> Result<Vec<Vec<f32>>, SpectrumError> {
         if samples.len() < self.config.window_size {
-            return Err(FFTError::ProcessingError(
+            return Err(SpectrumError::Analysis(
                 "Not enough samples for processing".to_string(),
             ));
         }
@@ -133,7 +107,7 @@ impl FFTProcessor {
         &self,
         samples: &[f32],
         padding_ratio: f32,
-    ) -> Result<Vec<Vec<f32>>, FFTError> {
+    ) -> Result<Vec<Vec<f32>>, SpectrumError> {
         // Calculate padding size
         let padding_samples = (samples.len() as f32 * padding_ratio) as usize;
 
@@ -177,7 +151,7 @@ impl FFTProcessor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::command::spectrum::config::QualityLevel;
+    use crate::command::spectrum::core::config::QualityLevel;
 
     fn create_test_config() -> SpectrogramConfig {
         SpectrogramConfig::new(44100.0, 100.0, 8000.0, 1024, QualityLevel::Standard).unwrap()
@@ -188,7 +162,7 @@ mod tests {
         (0..samples)
             .map(|i| {
                 let t = i as f32 / sample_rate;
-                (2.0 * PI * freq * t).sin()
+                (2.0 * std::f32::consts::PI * freq * t).sin()
             })
             .collect()
     }
@@ -202,7 +176,7 @@ mod tests {
 
     #[test]
     fn test_window_generation() {
-        let window = FFTProcessor::generate_hanning_window(1024);
+        let window = windowing::generate_hanning_window(1024);
         assert_eq!(window.len(), 1024);
         assert!(window[0] < 0.1);
         assert!(window[window.len() - 1] < 0.1);

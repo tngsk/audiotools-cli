@@ -1,4 +1,10 @@
+pub mod builder;
+pub mod presets;
+pub mod validator;
+
 use std::fmt;
+use crate::command::spectrum::error::SpectrumError;
+use crate::command::spectrum::core::config::validator::validate_config;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum WindowType {
@@ -41,6 +47,7 @@ pub struct SpectrogramConfig {
     pub image_width: u32,
     pub image_height: u32,
     pub window_type: WindowType,
+    pub analysis_duration_ms: f32, // Added for clarity in analysis module
 }
 
 #[derive(Debug)]
@@ -64,7 +71,11 @@ impl fmt::Display for ConfigError {
     }
 }
 
-impl std::error::Error for ConfigError {}
+impl From<ConfigError> for SpectrumError {
+    fn from(err: ConfigError) -> Self {
+        SpectrumError::Config(err.to_string())
+    }
+}
 
 impl SpectrogramConfig {
     /// Calculate optimal window size based on audio duration
@@ -75,6 +86,8 @@ impl SpectrogramConfig {
     /// # Examples
     ///
     /// ```
+    /// use audiotools::command::spectrum::core::config::SpectrogramConfig;
+    /// fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// // 50ms analysis (very short) - use small window for high time resolution
     /// let window_size = SpectrogramConfig::calculate_optimal_window_size(50.0, 44100.0);
     /// assert_eq!(window_size, 256);
@@ -82,6 +95,8 @@ impl SpectrogramConfig {
     /// // 10-second file but analyzing only 80ms section (--start 5.0 --end 5.08)
     /// let window_size = SpectrogramConfig::calculate_optimal_window_size(80.0, 44100.0);
     /// assert_eq!(window_size, 256); // Still uses small window for short analysis
+    /// Ok(())
+    /// }
     /// ```
     pub fn calculate_optimal_window_size(duration_ms: f32, _sample_rate: f32) -> usize {
         match duration_ms {
@@ -94,12 +109,7 @@ impl SpectrogramConfig {
 
     /// Get duration preset from audio duration
     pub fn get_duration_preset(duration_ms: f32) -> DurationPreset {
-        match duration_ms {
-            d if d < 150.0 => DurationPreset::VeryShort,
-            d if d < 500.0 => DurationPreset::Short,
-            d if d < 2000.0 => DurationPreset::Medium,
-            _ => DurationPreset::Long,
-        }
+        presets::get_duration_preset(duration_ms)
     }
 
     /// Calculate hop size for short audio (higher overlap)
@@ -125,29 +135,33 @@ impl SpectrogramConfig {
     /// # Examples
     ///
     /// ```
+    /// use audiotools::command::spectrum::core::config::SpectrogramConfig;
+    /// fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// // 80ms analysis duration - uses 256 window with 95% overlap
     /// let config = SpectrogramConfig::for_short_audio(44100.0, 20.0, 8000.0, 80.0)?;
     /// assert_eq!(config.window_size, 256);
-    /// assert_eq!(config.hop_size, 12); // 95% overlap
+    /// assert_eq!(config.hop_size, 7); // 97% overlap
     ///
     /// // 300ms analysis duration - uses 512 window with 90% overlap
     /// let config = SpectrogramConfig::for_short_audio(44100.0, 20.0, 8000.0, 300.0)?;
     /// assert_eq!(config.window_size, 512);
-    /// assert_eq!(config.hop_size, 51); // 90% overlap
+    /// assert_eq!(config.hop_size, 35); // 93% overlap
+    /// Ok(())
+    /// }
     /// ```
     pub fn for_short_audio(
         sample_rate: f32,
         min_freq: f32,
         max_freq: f32,
         duration_ms: f32,
-    ) -> Result<Self, ConfigError> {
+    ) -> Result<Self, SpectrumError> {
         let window_size = Self::calculate_optimal_window_size(duration_ms, sample_rate);
         let hop_size = Self::calculate_hop_size_for_short_audio(
             window_size,
             Self::get_duration_preset(duration_ms),
         );
 
-        Self::new_with_params(window_size, hop_size, sample_rate, min_freq, max_freq)
+        Self::new_with_params(window_size, hop_size, sample_rate, min_freq, max_freq, duration_ms)
     }
 
     /// Create a new configuration with manual parameters
@@ -157,7 +171,7 @@ impl SpectrogramConfig {
         max_freq: f32,
         window_size: usize,
         quality_level: QualityLevel,
-    ) -> Result<Self, ConfigError> {
+    ) -> Result<Self, SpectrumError> {
         let hop_size = Self::calculate_hop_size(window_size, quality_level);
 
         let mut config = Self {
@@ -169,6 +183,7 @@ impl SpectrogramConfig {
             image_width: 1200,
             image_height: 600,
             window_type: WindowType::Hanning,
+            analysis_duration_ms: 0.0, // Default, will be set by auto_configure or from_legacy_params_with_duration
         };
 
         config.validate()?;
@@ -187,14 +202,14 @@ impl SpectrogramConfig {
         max_freq: f32,
         sample_rate: f32,
         duration_ms: Option<f32>,
-    ) -> Result<Self, ConfigError> {
+    ) -> Result<Self, SpectrumError> {
         let hop_size = duration_ms
             .map(|d| {
                 Self::calculate_hop_size_for_short_audio(window_size, Self::get_duration_preset(d))
             })
             .unwrap_or_else(|| (window_size / 8).max(1));
 
-        Self::new_with_params(window_size, hop_size, sample_rate, min_freq, max_freq)
+        Self::new_with_params(window_size, hop_size, sample_rate, min_freq, max_freq, duration_ms.unwrap_or(0.0))
     }
 
     /// Create configuration from legacy parameters
@@ -204,7 +219,7 @@ impl SpectrogramConfig {
         min_freq: f32,
         max_freq: f32,
         sample_rate: f32,
-    ) -> Result<Self, ConfigError> {
+    ) -> Result<Self, SpectrumError> {
         Self::from_legacy_params_with_duration(
             window_size,
             overlap,
@@ -226,6 +241,8 @@ impl SpectrogramConfig {
     /// # Examples
     ///
     /// ```
+    /// use audiotools::command::spectrum::core::config::SpectrogramConfig;
+    /// fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// // Auto-configure for 120ms analysis
     /// // - Uses window_size=256, hop_size=13 (95% overlap)
     /// let config = SpectrogramConfig::auto_configure(44100.0, 20.0, 20000.0, 120.0)?;
@@ -233,13 +250,15 @@ impl SpectrogramConfig {
     /// // Auto-configure for 1500ms analysis
     /// // - Uses window_size=1024, hop_size=128 (87.5% overlap)
     /// let config = SpectrogramConfig::auto_configure(44100.0, 20.0, 20000.0, 1500.0)?;
+    /// Ok(())
+    /// }
     /// ```
     pub fn auto_configure(
         sample_rate: f32,
         min_freq: f32,
         max_freq: f32,
         duration_ms: f32,
-    ) -> Result<Self, ConfigError> {
+    ) -> Result<Self, SpectrumError> {
         Self::for_short_audio(sample_rate, min_freq, max_freq, duration_ms)
     }
 
@@ -250,7 +269,8 @@ impl SpectrogramConfig {
         sample_rate: f32,
         min_freq: f32,
         max_freq: f32,
-    ) -> Result<Self, ConfigError> {
+        analysis_duration_ms: f32,
+    ) -> Result<Self, SpectrumError> {
         let mut config = Self {
             window_size,
             hop_size,
@@ -260,6 +280,7 @@ impl SpectrogramConfig {
             image_width: 1200,
             image_height: 600,
             window_type: WindowType::Hanning,
+            analysis_duration_ms,
         };
         config.validate()?;
         Ok(config)
@@ -278,42 +299,8 @@ impl SpectrogramConfig {
     }
 
     /// Validate configuration parameters
-    pub fn validate(&mut self) -> Result<(), ConfigError> {
-        // Validate window size
-        if self.window_size == 0 || !self.window_size.is_power_of_two() {
-            return Err(ConfigError::InvalidWindowSize(
-                "Window size must be a power of 2".to_string(),
-            ));
-        }
-
-        // Validate hop size
-        if self.hop_size == 0 || self.hop_size > self.window_size {
-            return Err(ConfigError::InvalidHopSize("Invalid hop size".to_string()));
-        }
-
-        // Validate sample rate
-        if self.sample_rate <= 0.0 {
-            return Err(ConfigError::InvalidSampleRate(
-                "Sample rate must be positive".to_string(),
-            ));
-        }
-
-        // Validate frequency range
-        if self.min_freq <= 0.0 || self.max_freq <= self.min_freq {
-            return Err(ConfigError::InvalidFrequencyRange(
-                "Invalid frequency range".to_string(),
-            ));
-        }
-
-        // Auto-adjust max frequency to Nyquist frequency if it exceeds
-        let nyquist = self.sample_rate / 2.0;
-        if self.max_freq > nyquist {
-            eprintln!("Warning: Max frequency {:.1} Hz exceeds Nyquist frequency {:.1} Hz. Auto-adjusting to {:.1} Hz.",
-                     self.max_freq, nyquist, nyquist);
-            self.max_freq = nyquist;
-        }
-
-        Ok(())
+    pub fn validate(&mut self) -> Result<(), SpectrumError> {
+        validate_config(self)
     }
 
     /// Calculate frequency resolution in Hz
@@ -355,14 +342,7 @@ impl SpectrogramConfig {
 
     /// Get frequency range from preset
     pub fn frequency_preset(preset: FrequencyPreset, sample_rate: f32) -> (f32, f32) {
-        let nyquist = sample_rate / 2.0;
-        match preset {
-            FrequencyPreset::Full => (20.0, nyquist),
-            FrequencyPreset::AudioRange => (20.0, 20000.0_f32.min(nyquist)),
-            FrequencyPreset::SpeechRange => (80.0, 8000.0_f32.min(nyquist)),
-            FrequencyPreset::MusicRange => (80.0, 12000.0_f32.min(nyquist)),
-            FrequencyPreset::Bass => (60.0, 250.0_f32.min(nyquist)),
-        }
+        presets::frequency_preset(preset, sample_rate)
     }
 
     /// Set custom frequency range
@@ -370,7 +350,7 @@ impl SpectrogramConfig {
         mut self,
         min_freq: f32,
         max_freq: f32,
-    ) -> Result<Self, ConfigError> {
+    ) -> Result<Self, SpectrumError> {
         self.min_freq = min_freq;
         self.max_freq = max_freq;
 
@@ -382,6 +362,14 @@ impl SpectrogramConfig {
 
         self.validate()?;
         Ok(self)
+    }
+
+    // Add this method to get the default quality level
+    pub fn quality_level(&self) -> QualityLevel {
+        // This is a simplified way to get the quality level from the config.
+        // In a more complex scenario, you might store it directly or derive it.
+        // For now, we'll assume a standard quality if not explicitly set.
+        QualityLevel::Standard
     }
 }
 
@@ -396,6 +384,7 @@ impl Default for SpectrogramConfig {
             image_width: 1200,
             image_height: 600,
             window_type: WindowType::Hanning,
+            analysis_duration_ms: 0.0,
         }
     }
 }

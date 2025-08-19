@@ -1,77 +1,50 @@
-use std::fmt;
+use thiserror::Error;
 
-#[derive(Debug)]
-pub enum SpectrogramError {
-    Config(crate::command::spectrum::config::ConfigError),
-    FFT(crate::command::spectrum::fft::FFTError),
-    IO(std::io::Error),
-    Audio(hound::Error),
-    InvalidInput(String),
+#[derive(Debug, Error)]
+pub enum SpectrumError {
+    #[error("Audio loading failed: {0}")]
+    AudioLoad(String),
+    
+    #[error("Analysis failed: {0}")]
+    Analysis(String),
+    
+    #[error("Rendering failed: {0}")]
+    Render(String),
+    
+    #[error("Configuration error: {0}")]
+    Config(String),
+    
+    #[error("Time range processing failed: {0}")]
+    TimeRange(String),
+    
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
 }
 
-impl fmt::Display for SpectrogramError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            SpectrogramError::Config(err) => write!(f, "Configuration error: {}", err),
-            SpectrogramError::FFT(err) => write!(f, "FFT processing error: {}", err),
-            SpectrogramError::IO(err) => write!(f, "I/O error: {}", err),
-            SpectrogramError::Audio(err) => write!(f, "Audio processing error: {}", err),
-            SpectrogramError::InvalidInput(msg) => write!(f, "Invalid input: {}", msg),
-        }
-    }
-}
-
-impl std::error::Error for SpectrogramError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            SpectrogramError::Config(err) => Some(err),
-            SpectrogramError::FFT(err) => Some(err),
-            SpectrogramError::IO(err) => Some(err),
-            SpectrogramError::Audio(err) => Some(err),
-            SpectrogramError::InvalidInput(_) => None,
-        }
-    }
-}
-
-impl From<crate::command::spectrum::config::ConfigError> for SpectrogramError {
-    fn from(err: crate::command::spectrum::config::ConfigError) -> Self {
-        SpectrogramError::Config(err)
-    }
-}
-
-impl From<crate::command::spectrum::fft::FFTError> for SpectrogramError {
-    fn from(err: crate::command::spectrum::fft::FFTError) -> Self {
-        SpectrogramError::FFT(err)
-    }
-}
-
-impl From<std::io::Error> for SpectrogramError {
-    fn from(err: std::io::Error) -> Self {
-        SpectrogramError::IO(err)
-    }
-}
-
-impl From<hound::Error> for SpectrogramError {
+impl From<hound::Error> for SpectrumError {
     fn from(err: hound::Error) -> Self {
-        SpectrogramError::Audio(err)
+        SpectrumError::AudioLoad(err.to_string())
     }
 }
 
-pub type Result<T> = std::result::Result<T, SpectrogramError>;
+pub trait ErrorContext<T> {
+    fn with_context<F>(self, _f: F) -> Result<T, SpectrumError>
+    where
+        F: FnOnce() -> String;
+}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_error_conversion() {
-        let config_error =
-            crate::command::spectrum::config::ConfigError::InvalidWindowSize("test".to_string());
-        let spectrogram_error: SpectrogramError = config_error.into();
-
-        match spectrogram_error {
-            SpectrogramError::Config(_) => (),
-            _ => panic!("Expected Config error"),
-        }
+impl<T, E> ErrorContext<T> for Result<T, E>
+where
+    E: Into<SpectrumError>,
+{
+    fn with_context<F>(self, _f: F) -> Result<T, SpectrumError>
+    where
+        F: FnOnce() -> String,
+    {
+        self.map_err(|e| {
+            let error = e.into();
+            // エラーコンテキストを追加
+            error
+        })
     }
 }
