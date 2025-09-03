@@ -1,16 +1,16 @@
 pub mod processor;
 
-use std::path::Path;
-use hound::WavReader;
+use crate::command::spectrum::core::AudioLoader;
 use crate::command::spectrum::domain::audio_data::AudioData;
 use crate::command::spectrum::error::SpectrumError;
-use crate::command::spectrum::core::AudioLoader;
+use hound::WavReader;
+use std::path::Path;
 
 pub struct DefaultAudioLoader;
 
 impl AudioLoader for DefaultAudioLoader {
     fn load(&self, input: &Path) -> Result<AudioData, SpectrumError> {
-        let mut reader = WavReader::open(input).map_err(|e| SpectrumError::AudioLoad(format!("Failed to open audio file: {}", e)))?;
+        let mut reader = WavReader::open(input)?;
         let spec = reader.spec();
         let sample_rate = spec.sample_rate as f32;
         let duration = reader.duration() as f32 / sample_rate;
@@ -34,7 +34,9 @@ impl AudioLoader for DefaultAudioLoader {
                     reader.samples::<i32>().collect();
                 samples?
                     .chunks(spec.channels as usize)
-                    .map(|chunk| chunk.iter().sum::<i32>() as f32 / (chunk.len() as f32 * max_value))
+                    .map(|chunk| {
+                        chunk.iter().sum::<i32>() as f32 / (chunk.len() as f32 * max_value)
+                    })
                     .collect()
             }
         };

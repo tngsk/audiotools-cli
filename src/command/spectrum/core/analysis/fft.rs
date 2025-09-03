@@ -1,7 +1,7 @@
-use crate::command::spectrum::core::config::SpectrogramConfig;
-use rustfft::{num_complex::Complex, FftPlanner};
-use crate::command::spectrum::error::SpectrumError;
 use crate::command::spectrum::core::analysis::windowing;
+use crate::command::spectrum::core::config::SpectrogramConfig;
+use crate::command::spectrum::error::SpectrumError;
+use rustfft::{num_complex::Complex, FftPlanner};
 
 /// Simple FFT processor for spectrogram generation
 pub struct FFTProcessor {
@@ -19,7 +19,7 @@ impl FFTProcessor {
     /// Process a single frame of audio samples
     pub fn process_frame(&self, samples: &[f32]) -> Result<Vec<f32>, SpectrumError> {
         if samples.len() != self.config.window_size {
-            return Err(SpectrumError::Analysis(format!(
+            return Err(SpectrumError::new(format!(
                 "Expected {} samples, got {}",
                 self.config.window_size,
                 samples.len()
@@ -70,9 +70,7 @@ impl FFTProcessor {
     /// Process entire audio signal and return spectrogram with high resolution
     pub fn process_signal(&self, samples: &[f32]) -> Result<Vec<Vec<f32>>, SpectrumError> {
         if samples.len() < self.config.window_size {
-            return Err(SpectrumError::Analysis(
-                "Not enough samples for processing".to_string(),
-            ));
+            return Err(SpectrumError::new("Signal too short for window size"));
         }
 
         let mut spectrogram = Vec::new();

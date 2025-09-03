@@ -2,9 +2,8 @@ pub mod builder;
 pub mod presets;
 pub mod validator;
 
-use std::fmt;
-use crate::command::spectrum::error::SpectrumError;
 use crate::command::spectrum::core::config::validator::validate_config;
+use crate::command::spectrum::error::SpectrumError;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum WindowType {
@@ -48,33 +47,6 @@ pub struct SpectrogramConfig {
     pub image_height: u32,
     pub window_type: WindowType,
     pub analysis_duration_ms: f32, // Added for clarity in analysis module
-}
-
-#[derive(Debug)]
-pub enum ConfigError {
-    InvalidWindowSize(String),
-    InvalidHopSize(String),
-    InvalidFrequencyRange(String),
-    InvalidSampleRate(String),
-}
-
-impl fmt::Display for ConfigError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ConfigError::InvalidWindowSize(msg) => write!(f, "Invalid window size: {}", msg),
-            ConfigError::InvalidHopSize(msg) => write!(f, "Invalid hop size: {}", msg),
-            ConfigError::InvalidFrequencyRange(msg) => {
-                write!(f, "Invalid frequency range: {}", msg)
-            }
-            ConfigError::InvalidSampleRate(msg) => write!(f, "Invalid sample rate: {}", msg),
-        }
-    }
-}
-
-impl From<ConfigError> for SpectrumError {
-    fn from(err: ConfigError) -> Self {
-        SpectrumError::Config(err.to_string())
-    }
 }
 
 impl SpectrogramConfig {
@@ -161,7 +133,14 @@ impl SpectrogramConfig {
             Self::get_duration_preset(duration_ms),
         );
 
-        Self::new_with_params(window_size, hop_size, sample_rate, min_freq, max_freq, duration_ms)
+        Self::new_with_params(
+            window_size,
+            hop_size,
+            sample_rate,
+            min_freq,
+            max_freq,
+            duration_ms,
+        )
     }
 
     /// Create a new configuration with manual parameters
@@ -209,7 +188,14 @@ impl SpectrogramConfig {
             })
             .unwrap_or_else(|| (window_size / 8).max(1));
 
-        Self::new_with_params(window_size, hop_size, sample_rate, min_freq, max_freq, duration_ms.unwrap_or(0.0))
+        Self::new_with_params(
+            window_size,
+            hop_size,
+            sample_rate,
+            min_freq,
+            max_freq,
+            duration_ms.unwrap_or(0.0),
+        )
     }
 
     /// Create configuration from legacy parameters

@@ -1,6 +1,6 @@
-use plotters::prelude::*;
 use crate::command::spectrum::core::config::SpectrogramConfig;
 use crate::command::spectrum::error::SpectrumError;
+use plotters::prelude::*;
 
 // Constants (consider moving to a dedicated constants module or make configurable)
 const FONT_FAMILY: &str = "Fira Code";
@@ -23,7 +23,7 @@ pub fn draw_annotations(
                     vec![(0.0, *freq), (total_time, *freq)],
                     GREEN.stroke_width(2),
                 ))
-                .map_err(|e| SpectrumError::Render(e.to_string()))?;
+                .map_err(|e| SpectrumError::new(e.to_string()))?;
 
             // Draw label
             chart
@@ -32,7 +32,7 @@ pub fn draw_annotations(
                     (total_time * 0.95, *freq + config.freq_resolution() * 5.0),
                     (FONT_FAMILY, 14).into_font().color(&GREEN),
                 )))
-                .map_err(|e| SpectrumError::Render(e.to_string()))?;
+                .map_err(|e| SpectrumError::new(e.to_string()))?;
         }
     }
 

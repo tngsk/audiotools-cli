@@ -1,8 +1,8 @@
+use crate::command::spectrum::error::SpectrumError;
 use crate::utils::detection::AutoStartDetection;
 use crate::utils::time::{TimeRange, TimeSpecification};
-use crate::command::spectrum::error::SpectrumError;
 
-/// Process time range with auto-detection support
+// Process time range for samples
 pub fn process_time_range(
     samples: &[f32],
     sample_rate: f32,
@@ -13,9 +13,7 @@ pub fn process_time_range(
     let (start_time, end_time) = if let Some(auto_config) = auto_start {
         let detected_start = auto_config
             .detect_start_time(samples, sample_rate)
-            .ok_or_else(|| {
-                SpectrumError::TimeRange("Failed to detect start time".to_string())
-            })?;
+            .ok_or_else(|| SpectrumError::new("Failed to detect audio start time"))?;
 
         let end_time = if let Some(range) = time_range {
             TimeRange {
@@ -32,16 +30,14 @@ pub fn process_time_range(
     } else if let Some(range) = time_range {
         range
             .resolve(total_duration)
-            .map_err(|e| SpectrumError::TimeRange(format!("Invalid time range: {}", e)))?
+            .map_err(|e| SpectrumError::new(format!("Invalid time range: {}", e)))?
     } else {
         (0.0, total_duration)
     };
 
     // Basic validation
     if start_time < 0.0 || end_time <= start_time || start_time >= total_duration {
-        return Err(SpectrumError::TimeRange(
-            "Invalid time range".to_string(),
-        ));
+        return Err(SpectrumError::new("Invalid time range"));
     }
 
     Ok((start_time, end_time))

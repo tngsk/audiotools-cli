@@ -4,14 +4,14 @@ use crate::command::spectrum::error::SpectrumError;
 pub fn parse_frequency_annotation(s: &str) -> Result<(f32, String), SpectrumError> {
     let parts: Vec<&str> = s.split(':').collect();
     if parts.len() != 2 {
-        return Err(SpectrumError::Config(
-            "Annotation format should be 'frequency:label'".to_string(),
+        return Err(SpectrumError::new(
+            "Annotation format should be 'frequency:label'",
         ));
     }
 
     let freq = parts[0]
         .parse::<f32>()
-        .map_err(|_| SpectrumError::Config("Invalid frequency value".to_string()))?;
+        .map_err(|_| SpectrumError::new("Invalid frequency value"))?;
 
     Ok((freq, parts[1].to_string()))
 }

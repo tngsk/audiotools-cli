@@ -1,16 +1,16 @@
 //! Simplified spectrum analysis and spectrogram generation module
 
-pub mod core;
-pub mod render;
-pub mod domain;
 pub mod command;
-pub mod testing;
+pub mod core;
+pub mod domain;
 pub mod error;
+pub mod render;
+pub mod testing;
 
 // Re-export main types from new modules
-pub use core::config::{FrequencyPreset, QualityLevel, SpectrogramConfig, WindowType};
-pub use error::{SpectrumError as SpectrogramError, ErrorContext as Result};
 pub use core::analysis::fft::FFTProcessor;
+pub use core::config::{FrequencyPreset, QualityLevel, SpectrogramConfig, WindowType};
+pub use error::{ResultExt, SpectrumError as SpectrogramError};
 
 // Constants (consider moving to config or render modules)
 // These constants are now used within the render module, so they can be removed from here.

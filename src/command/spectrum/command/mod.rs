@@ -1,14 +1,11 @@
+use crate::command::spectrum::core::audio::processor::process_time_range;
+use crate::command::spectrum::core::config::SpectrogramConfig;
+use crate::command::spectrum::core::{AudioLoader, SpectralAnalyzer, SpectrogramRenderer};
+use crate::command::spectrum::domain::request::SpectrumRequest;
+use crate::command::spectrum::domain::spectrogram::{Spectrogram, SpectrogramMetadata};
+use crate::command::spectrum::error::SpectrumError;
 use std::path::PathBuf;
 use std::time::Duration;
-use crate::command::spectrum::core::config::SpectrogramConfig;
-use crate::command::spectrum::error::SpectrumError;
-use crate::command::spectrum::core::{AudioLoader, SpectralAnalyzer, SpectrogramRenderer};
-use crate::command::spectrum::domain::spectrogram::{Spectrogram, SpectrogramMetadata};
-use crate::utils::detection::AutoStartDetection;
-use crate::utils::time::{TimeRange, TimeSpecification};
-use crate::command::spectrum::domain::request::{SpectrumRequest, SpectrumOptions};
-use crate::command::spectrum::core::audio::processor::process_time_range;
-use crate::command::spectrum::domain::frequency::parse_frequency_annotation;
 
 pub struct SpectrumCommand {
     audio_loader: Box<dyn AudioLoader>,
@@ -22,10 +19,17 @@ impl SpectrumCommand {
         analyzer: Box<dyn SpectralAnalyzer>,
         renderer: Box<dyn SpectrogramRenderer>,
     ) -> Self {
-        Self { audio_loader: loader, analyzer, renderer }
+        Self {
+            audio_loader: loader,
+            analyzer,
+            renderer,
+        }
     }
-    
-    pub async fn execute(&self, request: SpectrumRequest) -> Result<SpectrumResponse, SpectrumError> {
+
+    pub async fn execute(
+        &self,
+        request: SpectrumRequest,
+    ) -> Result<SpectrumResponse, SpectrumError> {
         let start_time_overall = std::time::Instant::now();
 
         // 1. Load audio data
@@ -106,9 +110,12 @@ impl SpectrumCommand {
             config_used: config,
         })
     }
-    
+
     // バッチ処理用 (TODO: Implement)
-    pub async fn execute_batch(&self, requests: Vec<SpectrumRequest>) -> Vec<Result<SpectrumResponse, SpectrumError>> {
+    pub async fn execute_batch(
+        &self,
+        requests: Vec<SpectrumRequest>,
+    ) -> Vec<Result<SpectrumResponse, SpectrumError>> {
         // This needs to be async and use join_all if concurrent, or a simple loop if sequential.
         // For now, let's make it a simple loop.
         let mut results = Vec::with_capacity(requests.len());
@@ -130,8 +137,8 @@ pub struct SpectrumResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::command::spectrum::domain::frequency::parse_frequency_annotation;
     use crate::utils::time::{TimeRange, TimeSpecification};
-    use crate::command::spectrum::core::config::QualityLevel;
 
     #[test]
     fn test_parse_frequency_annotation() {

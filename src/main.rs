@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use audiotools::command::{
     convert, info, loudness, normalize,
-    spectrum::{FrequencyPreset},
+    spectrum::FrequencyPreset,
     waveform::{self, parse_time_annotation, WaveformScale},
 };
 
@@ -12,14 +12,13 @@ use audiotools::utils::time::{self, TimeSpecification};
 
 // New imports for spectrum command
 use audiotools::command::spectrum::command::SpectrumCommand;
-use audiotools::command::spectrum::domain::request::{SpectrumRequest, SpectrumOptions};
-use audiotools::command::spectrum::command::SpectrumResponse;
-use audiotools::command::spectrum::core::audio::DefaultAudioLoader;
-use audiotools::command::spectrum::render::DefaultSpectrogramRenderer;
-use audiotools::command::spectrum::core::config::{SpectrogramConfig};
-use audiotools::command::spectrum::core::config::builder::ConfigBuilder;
-use audiotools::command::spectrum::domain::frequency::parse_frequency_annotation; // Import directly from new location
 use audiotools::command::spectrum::core::analysis::DefaultSpectralAnalyzer;
+use audiotools::command::spectrum::core::audio::DefaultAudioLoader;
+use audiotools::command::spectrum::core::config::builder::ConfigBuilder;
+use audiotools::command::spectrum::core::config::SpectrogramConfig;
+use audiotools::command::spectrum::domain::frequency::parse_frequency_annotation; // Import directly from new location
+use audiotools::command::spectrum::domain::request::{SpectrumOptions, SpectrumRequest};
+use audiotools::command::spectrum::render::DefaultSpectrogramRenderer;
 
 // Define CLI application structure using clap
 #[derive(Parser)]
@@ -351,13 +350,13 @@ async fn main() {
             );
 
             // Build SpectrogramConfig using ConfigBuilder
-            let mut config_builder = ConfigBuilder::new()
-                .image_dimensions(1200, 600);
+            let mut config_builder = ConfigBuilder::new().image_dimensions(1200, 600);
 
             if let Some(preset) = freq_preset {
                 // Use a default sample rate for preset calculation, actual will be from audio file
                 let default_sample_rate = 44100.0;
-                let (p_min, p_max) = SpectrogramConfig::frequency_preset(preset.into(), default_sample_rate);
+                let (p_min, p_max) =
+                    SpectrogramConfig::frequency_preset(preset.into(), default_sample_rate);
                 config_builder = config_builder.frequency_range(p_min, p_max);
             } else {
                 config_builder = config_builder.frequency_range(min_freq, max_freq);
@@ -371,7 +370,9 @@ async fn main() {
                 config_builder = config_builder.auto_configure(0.0); // Placeholder duration
             }
 
-            let config = config_builder.build().expect("Failed to build spectrogram config");
+            let config = config_builder
+                .build()
+                .expect("Failed to build spectrogram config");
 
             let output_path = input.with_extension("png"); // Default output path
 
@@ -389,11 +390,8 @@ async fn main() {
             let spectral_analyzer = Box::new(DefaultSpectralAnalyzer::new(config)); // Pass config to analyzer
             let spectrogram_renderer = Box::new(DefaultSpectrogramRenderer);
 
-            let spectrum_command = SpectrumCommand::new(
-                audio_loader,
-                spectral_analyzer,
-                spectrogram_renderer,
-            );
+            let spectrum_command =
+                SpectrumCommand::new(audio_loader, spectral_analyzer, spectrogram_renderer);
 
             // Handle recursive processing
             if recursive {
@@ -453,11 +451,21 @@ enum FrequencyPresetArg {
 impl From<FrequencyPresetArg> for FrequencyPreset {
     fn from(arg: FrequencyPresetArg) -> Self {
         match arg {
-            FrequencyPresetArg::Full => audiotools::command::spectrum::core::config::FrequencyPreset::Full,
-            FrequencyPresetArg::AudioRange => audiotools::command::spectrum::core::config::FrequencyPreset::AudioRange,
-            FrequencyPresetArg::SpeechRange => audiotools::command::spectrum::core::config::FrequencyPreset::SpeechRange,
-            FrequencyPresetArg::MusicRange => audiotools::command::spectrum::core::config::FrequencyPreset::MusicRange,
-            FrequencyPresetArg::Bass => audiotools::command::spectrum::core::config::FrequencyPreset::Bass,
+            FrequencyPresetArg::Full => {
+                audiotools::command::spectrum::core::config::FrequencyPreset::Full
+            }
+            FrequencyPresetArg::AudioRange => {
+                audiotools::command::spectrum::core::config::FrequencyPreset::AudioRange
+            }
+            FrequencyPresetArg::SpeechRange => {
+                audiotools::command::spectrum::core::config::FrequencyPreset::SpeechRange
+            }
+            FrequencyPresetArg::MusicRange => {
+                audiotools::command::spectrum::core::config::FrequencyPreset::MusicRange
+            }
+            FrequencyPresetArg::Bass => {
+                audiotools::command::spectrum::core::config::FrequencyPreset::Bass
+            }
         }
     }
 }

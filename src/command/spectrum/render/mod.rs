@@ -1,16 +1,16 @@
+pub mod annotations;
 pub mod canvas;
 pub mod colormap;
-pub mod annotations;
 pub mod layout;
 
-use std::path::{Path, PathBuf};
-use plotters::prelude::*;
-use crate::command::spectrum::domain::spectrogram::Spectrogram;
 use crate::command::spectrum::core::config::SpectrogramConfig;
-use crate::command::spectrum::error::SpectrumError;
 use crate::command::spectrum::core::SpectrogramRenderer;
-use crate::command::spectrum::render::colormap::power_to_color;
+use crate::command::spectrum::domain::spectrogram::Spectrogram;
+use crate::command::spectrum::error::SpectrumError;
 use crate::command::spectrum::render::annotations::draw_annotations;
+use crate::command::spectrum::render::colormap::power_to_color;
+use plotters::prelude::*;
+use std::path::Path;
 
 // Constants (consider moving to a dedicated constants module or make configurable)
 const FONT_FAMILY: &str = "Fira Code";
@@ -21,7 +21,7 @@ pub struct DefaultSpectrogramRenderer;
 impl SpectrogramRenderer for DefaultSpectrogramRenderer {
     fn render(&self, spectrogram: &Spectrogram, output: &Path) -> Result<(), SpectrumError> {
         if spectrogram.data.is_empty() {
-            return Err(SpectrumError::Render("No spectrogram data to render".to_string()));
+            return Err(SpectrumError::new("No spectrogram data to render"));
         }
 
         let config = &spectrogram.metadata.config; // Assuming config is part of metadata
@@ -38,7 +38,7 @@ impl SpectrogramRenderer for DefaultSpectrogramRenderer {
         .into_drawing_area();
 
         root.fill(&BACKGROUND_COLOR)
-            .map_err(|e| SpectrumError::Render(e.to_string()))?;
+            .map_err(|e| SpectrumError::new(e.to_string()))?;
 
         let filename = input_path
             .file_name()
@@ -61,7 +61,7 @@ impl SpectrogramRenderer for DefaultSpectrogramRenderer {
             .set_label_area_size(LabelAreaPosition::Left, 60)
             .set_label_area_size(LabelAreaPosition::Bottom, 40)
             .build_cartesian_2d(0.0..total_time, config.min_freq..config.max_freq)
-            .map_err(|e| SpectrumError::Render(e.to_string()))?;
+            .map_err(|e| SpectrumError::new(e.to_string()))?;
 
         chart
             .configure_mesh()
@@ -75,7 +75,7 @@ impl SpectrogramRenderer for DefaultSpectrogramRenderer {
             .y_labels(10)
             .y_label_formatter(&|y| format!("{:.0}", y))
             .draw()
-            .map_err(|e| SpectrumError::Render(e.to_string()))?;
+            .map_err(|e| SpectrumError::new(e.to_string()))?;
 
         // Draw spectrogram data with improved resolution
         draw_spectrogram_data(
@@ -92,7 +92,7 @@ impl SpectrogramRenderer for DefaultSpectrogramRenderer {
         }
 
         root.present()
-            .map_err(|e| SpectrumError::Render(e.to_string()))?;
+            .map_err(|e| SpectrumError::new(e.to_string()))?;
 
         Ok(())
     }
@@ -156,14 +156,15 @@ fn draw_spectrogram_data(
                                 [(time_start, freq_start), (time_end, freq_end)],
                                 color.filled(),
                             )))
-                            .map_err(|e| SpectrumError::Render(e.to_string()))?;
+                            .map_err(|e| SpectrumError::new(e.to_string()))?;
                     }
                 }
             }
         }
     }
 
-    Ok(())}
+    Ok(())
+}
 
 /// Draw spectrogram with interpolation for smooth rendering
 fn draw_interpolated_spectrogram(
@@ -204,7 +205,7 @@ fn draw_interpolated_spectrogram(
                             [(time, freq), (time_end, freq + freq_resolution)],
                             power_to_color(normalized).filled(),
                         )))
-                        .map_err(|e| SpectrumError::Render(e.to_string()))?;
+                        .map_err(|e| SpectrumError::new(e.to_string()))?;
                 }
             }
         }
@@ -226,13 +227,14 @@ fn draw_interpolated_spectrogram(
                             ],
                             power_to_color(normalized).filled(),
                         )))
-                        .map_err(|e| SpectrumError::Render(e.to_string()))?;
+                        .map_err(|e| SpectrumError::new(e.to_string()))?;
                 }
             }
         }
     }
 
-    Ok(())}
+    Ok(())
+}
 
 /// Get adaptive dB range based on window size
 fn get_adaptive_db_range(window_size: usize) -> (f32, f32) {

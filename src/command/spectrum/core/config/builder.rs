@@ -1,4 +1,4 @@
-use crate::command::spectrum::core::config::{SpectrogramConfig, WindowType, QualityLevel, ConfigError};
+use crate::command::spectrum::core::config::{QualityLevel, SpectrogramConfig, WindowType};
 use crate::command::spectrum::error::SpectrumError;
 
 pub struct ConfigBuilder {
@@ -80,11 +80,14 @@ impl ConfigBuilder {
         let image_width = self.image_width.unwrap_or(default_config.image_width);
         let image_height = self.image_height.unwrap_or(default_config.image_height);
         let window_type = self.window_type.unwrap_or(default_config.window_type);
-        let analysis_duration_ms = self.duration_ms.unwrap_or(default_config.analysis_duration_ms);
+        let analysis_duration_ms = self
+            .duration_ms
+            .unwrap_or(default_config.analysis_duration_ms);
 
         let window_size = if let Some(ws) = self.window_size {
             ws
-        } else if self.duration_ms.is_some() { // Only auto-configure if duration_ms was explicitly set
+        } else if self.duration_ms.is_some() {
+            // Only auto-configure if duration_ms was explicitly set
             SpectrogramConfig::calculate_optimal_window_size(analysis_duration_ms, sample_rate)
         } else {
             default_config.window_size // Fallback to default if no window_size and no duration_ms
@@ -98,7 +101,10 @@ impl ConfigBuilder {
             )
         } else {
             // Otherwise, use quality level based hop_size
-            SpectrogramConfig::calculate_hop_size(window_size, self.quality_level.unwrap_or(default_config.quality_level()))
+            SpectrogramConfig::calculate_hop_size(
+                window_size,
+                self.quality_level.unwrap_or(default_config.quality_level()),
+            )
         };
 
         let mut config = SpectrogramConfig {
@@ -169,9 +175,7 @@ mod tests {
 
     #[test]
     fn test_config_builder_invalid_values() {
-        let config = ConfigBuilder::new()
-            .sample_rate(-100.0)
-            .build();
+        let config = ConfigBuilder::new().sample_rate(-100.0).build();
         assert!(config.is_err());
 
         let config = ConfigBuilder::new()
