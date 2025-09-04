@@ -1,5 +1,10 @@
 [workspace]
-members = ["crates/spectrum-cli", "crates/convert-cli", "crates/info-cli"]
+members = [
+    "crates/spectrum-cli",
+    "crates/convert-cli",
+    "crates/info-cli",
+    "crates/loudness-cli",
+]
 
 [package]
 name = "audiotools"
