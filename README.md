@@ -72,12 +72,7 @@ Generate detailed waveform images from audio files, visualizing amplitude over t
     -   Option to show RMS (Root Mean Square) envelope.
     -   Outputs to PNG image (currently supports WAV input for visualization).
 
-### `fmtr` - JSON Output Formatter
-A separate utility to convert the text output from `audiotools info` and `audiotools loudness` into a structured JSON format.
 
--   **Features**:
-    -   Parses `info` command output into a JSON array of audio file details.
-    -   Parses `loudness` command output into a JSON array of loudness measurements.
 
 ## Prerequisites
 
@@ -181,17 +176,7 @@ audiotools waveform -i speech.wav -o speech_auto_waveform.png --auto-start --ann
 audiotools waveform -i long_track.wav -o long_track_segment.png --start 10 --end 20
 ```
 
-### `fmtr` Examples
 
-```bash
-# Format the output of 'audiotools info' to JSON
-audiotools info -i input.wav -o info_output.txt
-fmtr -i info_output.txt -o info.json -t info
-
-# Format the output of 'audiotools loudness' to JSON
-audiotools loudness -i input.wav -o loudness_output.txt
-fmtr -i loudness_output.txt -o loudness.json -t loudness
-```
 
 ## Command Line Options
 
