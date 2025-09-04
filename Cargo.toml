@@ -4,6 +4,7 @@ members = [
     "crates/convert-cli",
     "crates/info-cli",
     "crates/loudness-cli",
+    "crates/normalize-cli",
 ]
 
 [package]
