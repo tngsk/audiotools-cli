@@ -5,6 +5,7 @@ members = [
     "crates/info-cli",
     "crates/loudness-cli",
     "crates/normalize-cli",
+    "crates/waveform-cli",
 ]
 
 [package]
