@@ -1,10 +1,7 @@
-[workspace]
-members = ["crates/spectrum-cli"]
-
 [package]
-name = "audiotools"
+name = "spectrum-cli"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 byteorder = "1.5.0"
@@ -20,3 +17,12 @@ walkdir = "2.5.0"
 tokio = { version = "1", features = ["full"] }
 thiserror = "1.0"
 rand = "0.8"
+
+[dev-dependencies]
+tokio-test = "0.4"
+proptest = "1.0"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "spectrum_bench"
+harness = false
