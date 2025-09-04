@@ -1,4 +1,4 @@
-use crate::command::spectrum::error::SpectrumError;
+use crate::error::SpectrumError;
 use crate::utils::detection::AutoStartDetection;
 use crate::utils::time::{TimeRange, TimeSpecification};
 

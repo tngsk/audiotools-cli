@@ -3,9 +3,10 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::path::PathBuf;
 
-use info_cli::utils::ffprobe::run_ffprobe;
-use info_cli::utils::wave_header::WavHeader;
-use info_cli::utils::{format_size, get_walker, is_audio_file};
+mod utils;
+use crate::utils::ffprobe::run_ffprobe;
+use crate::utils::wave_header::WavHeader;
+use crate::utils::{format_size, get_walker, is_audio_file};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]

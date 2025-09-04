@@ -147,25 +147,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "audiotools"
-version = "0.1.0"
-dependencies = [
- "byteorder",
- "clap",
- "hound",
- "num-complex",
- "plotters",
- "rand 0.8.5",
- "rodio",
- "rustfft",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "walkdir",
-]
-
-[[package]]
 name = "autocfg"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -420,6 +401,7 @@ dependencies = [
  "clap",
  "hound",
  "rodio",
+ "tokio",
  "walkdir",
 ]
 
@@ -911,6 +893,7 @@ version = "0.1.0"
 dependencies = [
  "byteorder",
  "clap",
+ "tokio",
  "walkdir",
 ]
 
@@ -1071,6 +1054,7 @@ name = "loudness-cli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "tokio",
  "walkdir",
 ]
 
@@ -1162,6 +1146,7 @@ dependencies = [
  "clap",
  "hound",
  "rodio",
+ "tokio",
  "walkdir",
 ]
 
@@ -2151,6 +2136,8 @@ dependencies = [
  "clap",
  "hound",
  "plotters",
+ "rodio",
+ "tokio",
  "walkdir",
 ]
 

@@ -1,9 +1,11 @@
 use clap::Parser;
 use std::path::PathBuf;
 
-use normalize_cli::command::convert;
-use normalize_cli::utils::detection::detect_peak_level;
-use normalize_cli::utils::get_walker;
+mod command;
+mod utils;
+use crate::command::convert;
+use crate::utils::detection::detect_peak_level;
+use crate::utils::get_walker;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]

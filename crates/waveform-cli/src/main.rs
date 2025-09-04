@@ -3,9 +3,12 @@ use hound::WavReader;
 use plotters::prelude::*;
 use std::path::PathBuf;
 
-use waveform_cli::utils::detection::AutoStartDetection;
-use waveform_cli::utils::get_walker;
-use waveform_cli::utils::time::{TimeRange, TimeSpecification};
+mod utils;
+use crate::utils::detection;
+use crate::utils::detection::AutoStartDetection;
+use crate::utils::get_walker;
+use crate::utils::time;
+use crate::utils::time::{TimeRange, TimeSpecification, parse_time_specification};
 
 const FONT_FAMILY: &str = "Fira Code";
 const BACKGROUND_COLOR: RGBColor = RGBColor(4, 20, 36);

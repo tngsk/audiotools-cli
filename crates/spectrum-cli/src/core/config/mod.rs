@@ -2,7 +2,9 @@ pub mod builder;
 pub mod presets;
 pub mod validator;
 
-use crate::core::config::validator::validate_config;
+pub use presets::{frequency_preset, get_duration_preset};
+pub use validator::validate_config;
+
 use crate::error::SpectrumError;
 
 #[derive(Debug, Clone, Copy, PartialEq)]

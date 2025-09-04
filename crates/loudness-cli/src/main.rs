@@ -4,7 +4,8 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::process::Command;
 
-use loudness_cli::utils::{format_size, get_walker, is_audio_file};
+mod utils;
+use crate::utils::{format_size, get_walker, is_audio_file};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]

@@ -3,8 +3,9 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
-use convert_cli::utils::detection::detect_peak_level;
-use convert_cli::utils::get_walker;
+mod utils;
+use crate::utils::detection::detect_peak_level;
+use crate::utils::get_walker;
 
 // 定数の定義
 const SUPPORTED_FORMATS: &[&str] = &["wav", "flac", "mp3"];
@@ -117,9 +118,9 @@ async fn main() {
                 let stem = entry.path().file_stem().unwrap().to_string_lossy();
                 let filename = format!(
                     "{}{}{}.{}",
-                    args.prefix.unwrap_or(""),
+                    args.prefix.clone().unwrap_or(String::new()),
                     stem,
-                    args.postfix.unwrap_or(""),
+                    args.postfix.clone().unwrap_or(String::new()),
                     out_ext
                 );
 

@@ -1,18 +1,23 @@
 use clap::{Parser, ValueEnum};
 use std::path::PathBuf;
 
-use spectrum_cli::command::spectrum::command::SpectrumCommand;
-use spectrum_cli::command::spectrum::core::analysis::DefaultSpectralAnalyzer;
-use spectrum_cli::command::spectrum::core::audio::DefaultAudioLoader;
-use spectrum_cli::command::spectrum::core::config::builder::ConfigBuilder;
-use spectrum_cli::command::spectrum::core::config::{FrequencyPreset, SpectrogramConfig};
-use spectrum_cli::command::spectrum::domain::frequency::{
-    FrequencyAnnotation, parse_frequency_annotation,
-};
-use spectrum_cli::command::spectrum::domain::request::{SpectrumOptions, SpectrumRequest};
-use spectrum_cli::command::spectrum::render::DefaultSpectrogramRenderer;
-use spectrum_cli::utils::detection;
-use spectrum_cli::utils::time::{self, TimeSpecification};
+mod command;
+mod core;
+mod domain;
+mod error;
+mod render;
+mod utils;
+
+use crate::command::SpectrumCommand;
+use crate::core::analysis::DefaultSpectralAnalyzer;
+use crate::core::audio::DefaultAudioLoader;
+use crate::core::config::builder::ConfigBuilder;
+use crate::core::config::{FrequencyPreset, SpectrogramConfig};
+use crate::domain::frequency::{FrequencyAnnotation, parse_frequency_annotation};
+use crate::domain::request::{SpectrumOptions, SpectrumRequest};
+use crate::render::DefaultSpectrogramRenderer;
+use crate::utils::detection;
+use crate::utils::time::{self, TimeSpecification};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -185,21 +190,11 @@ enum FrequencyPresetArg {
 impl From<FrequencyPresetArg> for FrequencyPreset {
     fn from(arg: FrequencyPresetArg) -> Self {
         match arg {
-            FrequencyPresetArg::Full => {
-                spectrum_cli::command::spectrum::core::config::FrequencyPreset::Full
-            }
-            FrequencyPresetArg::AudioRange => {
-                spectrum_cli::command::spectrum::core::config::FrequencyPreset::AudioRange
-            }
-            FrequencyPresetArg::SpeechRange => {
-                spectrum_cli::command::spectrum::core::config::FrequencyPreset::Bass
-            }
-            FrequencyPresetArg::MusicRange => {
-                spectrum_cli::command::spectrum::core::config::FrequencyPreset::MusicRange
-            }
-            FrequencyPresetArg::Bass => {
-                spectrum_cli::command::spectrum::core::config::FrequencyPreset::Bass
-            }
+            FrequencyPresetArg::Full => crate::core::config::FrequencyPreset::Full,
+            FrequencyPresetArg::AudioRange => crate::core::config::FrequencyPreset::AudioRange,
+            FrequencyPresetArg::SpeechRange => crate::core::config::FrequencyPreset::SpeechRange,
+            FrequencyPresetArg::MusicRange => crate::core::config::FrequencyPreset::MusicRange,
+            FrequencyPresetArg::Bass => crate::core::config::FrequencyPreset::Bass,
         }
     }
 }
