@@ -48,31 +48,37 @@ impl WavHeader {
         Ok(header)
     }
 
-    pub fn format_info(&self) -> String {
-        format!(
-            "WAV Header Information:\n\
-             ChunkID: {}\n\
-             ChunkSize: {} bytes\n\
-             Format: {}\n\
-             Subchunk1ID: {}\n\
-             Subchunk1Size: {} bytes\n\
-             Audio Format: {} (1 = PCM)\n\
-             Number of Channels: {}\n\
-             Sample Rate: {} Hz\n\
-             Byte Rate: {} bytes/sec\n\
-             Block Align: {} bytes\n\
-             Bits per Sample: {} bits\n",
-            String::from_utf8_lossy(&self.chunk_id),
-            self.chunk_size,
-            String::from_utf8_lossy(&self.format),
-            String::from_utf8_lossy(&self.subchunk1_id),
-            self.subchunk1_size,
-            self.audio_format,
-            self.num_channels,
-            self.sample_rate,
-            self.byte_rate,
-            self.block_align,
-            self.bits_per_sample
-        )
+    pub fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+
+    pub fn bits_per_sample(&self) -> u16 {
+        self.bits_per_sample
+    }
+
+    pub fn num_channels(&self) -> u16 {
+        self.num_channels
+    }
+
+    pub fn total_samples(&self) -> Option<u64> {
+        // Assuming a standard 44-byte WAV header, the data chunk size is chunk_size - 36.
+        // This might need to be more robust for non-standard WAV files.
+        let data_size = self.chunk_size.checked_sub(36)?;
+        let bytes_per_sample_per_channel = self.bits_per_sample as u32 / 8;
+        let bytes_per_frame = self.num_channels as u32 * bytes_per_sample_per_channel;
+
+        if bytes_per_frame == 0 {
+            None
+        } else {
+            Some((data_size / bytes_per_frame) as u64)
+        }
+    }
+
+    pub fn time_precision(&self) -> Option<f64> {
+        if self.sample_rate == 0 {
+            None
+        } else {
+            Some(1.0 / self.sample_rate as f64)
+        }
     }
 }

@@ -893,6 +893,7 @@ version = "0.1.0"
 dependencies = [
  "byteorder",
  "clap",
+ "serde_json",
  "tokio",
  "walkdir",
 ]
