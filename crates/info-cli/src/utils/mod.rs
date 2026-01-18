@@ -1,5 +1,4 @@
-pub mod ffprobe;
-pub mod wave_header;
+
 
 pub const AUDIO_EXTENSIONS: &[&str] = &[
     "wav", "flac", "mp3", "aac", "m4a", "ogg", "wma", "aiff", "alac", "opus",

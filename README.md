@@ -1,213 +1,132 @@
-# AudioTools CLI
+# AudioTools CLI (Rust)
 
-AudioTools CLI is a collection of command-line utilities written in Rust for comprehensive audio file processing, analysis, and visualization. Designed for audio engineers, producers, and developers, it provides efficient tools for common audio tasks.
+AudioTools CLI は、音声ファイルの処理、分析、可視化を行うためのRust製コマンドラインユーティリティ集です。
+Python版 `audiotools` プロジェクトの機能をRustで再実装・拡張し、高効率かつモジュール化された構成になっています。
 
-## Features
+## 特徴
 
-AudioTools CLI is composed of several specialized sub-commands:
+-   **モジュラー構成**: 各機能が独立したクレート（`crates/`）として実装されていますが、共通ロジック（`audiotools-core`）を介して連携します。
+-   **統合設定管理**: デフォルト設定を単一の `config.yaml` で管理可能。CLI引数によるオーバーライドもサポート。
+-   **高速処理**: Rustによる実装で、大量の音声ファイル処理や信号処理を高速に実行します。
 
-### `audiotools convert` - Audio Format Conversion & Processing
-Convert audio files between various formats, adjust bit depth, sample rate, channel count, and apply peak normalization.
+## モジュール一覧
 
--   **Supported Formats**: WAV (16/24-bit), FLAC, MP3, AAC, M4A, OGG, WMA, AIFF, ALAC, OPUS.
--   **Features**:
-    -   Format conversion (e.g., WAV to MP3, FLAC to WAV).
-    -   Bit depth adjustment (e.g., 16-bit to 24-bit WAV).
-    -   Sample rate conversion.
-    -   Channel conversion (mono/stereo).
-    -   Peak normalization to a target dBFS level.
-    -   Recursive directory processing.
-    -   Customizable output filenames with prefixes/postfixes.
-    -   Option to flatten output directory structure.
+本プロジェクトは以下のCLIツールを含みます：
 
-### `audiotools normalize` - Peak Level Normalization
-Normalize audio files to a specified peak level (dBFS) by applying gain. This command is optimized for level adjustment.
+### 新規実装・強化モジュール
 
--   **Features**:
-    -   Detects current peak level and applies necessary gain.
-    -   Supports various input formats.
-    -   Recursive directory processing.
-    -   Force overwrite existing files.
+1.  **`segment-cli`** (`crates/segment-cli`)
+    -   音声分割ツール。無音区間やオンセット（音の立ち上がり）を検出してファイルを分割します。
+    -   主な機能: 無音トリミング、オンセット検出分割、フェード処理。
+2.  **`features-cli`** (`crates/features-cli`)
+    -   特徴量抽出ツール。音声ファイルから様々な音響特徴量を計算し、JSON/CSVで出力します。
+    -   主な特徴量: RMS, ZCR, Spectral Centroid/Rolloff/Flatness/Flux。
+3.  **`pca-cli`** (`crates/pca-cli`)
+    -   PCA（主成分分析）可視化ツール。抽出された特徴量データを次元圧縮し、散布図としてプロットします。
 
-### `audiotools info` - Audio File Metadata Extraction
-Extract detailed metadata from audio files, including format, size, and stream information using `ffprobe`. Provides specific WAV header details for `.wav` files.
+### 既存・リファクタリング済みモジュール
 
--   **Features**:
-    -   Extracts codec, sample rate, channels, bit rate, duration, and more.
-    -   Specific WAV header parsing for `.wav` files.
-    -   Filter output to display specific fields.
-    -   Recursive directory processing.
-    -   Output to console or a specified file.
+4.  **`convert-cli`** (`crates/convert-cli`)
+    -   フォーマット変換（WAV, FLAC, MP3等）、ビット深度変換、チャンネル変換。
+5.  **`normalize-cli`** (`crates/normalize-cli`)
+    -   ピークノーマライズ。指定したdBFSレベルに音量を正規化します。
+6.  **`spectrum-cli`** (`crates/spectrum-cli`)
+    -   スペクトログラム画像の生成。STFTパラメータや周波数範囲を詳細に設定可能。
+7.  **`waveform-cli`** (`crates/waveform-cli`)
+    -   波形画像の生成。RMSエンベロープ表示やアノテーション機能に対応。
+8.  **`info-cli`** (`crates/info-cli`)
+    -   音声ファイルのメタデータ（サンプリングレート、ビット深度、長さ等）の表示。
+9.  **`loudness-cli`** (`crates/loudness-cli`)
+    -   ラウドネス測定（EBU R128準拠）。
 
-### `audiotools loudness` - EBU R128 Loudness Analysis
-Perform EBU R128 loudness measurements on audio files using `ffmpeg`, providing integrated loudness, loudness range, and true peak values.
+## セットアップ
 
--   **Features**:
-    -   Calculates Integrated Loudness (LUFS).
-    -   Determines Loudness Range (LRA).
-    -   Measures True Peak (dBTP).
-    -   Recursive directory processing.
-    -   Output to console or a specified file.
+### 必要要件
+-   **Rust**: 最新の安定版 (`stable`)
+-   **FFmpeg**: システムのPATHに通っている必要があります（`convert`, `info`, `loudness` 等で使用）。
 
-### `audiotools spectrum` - Spectrogram Visualization
-Generate high-resolution spectrogram images from audio files, offering detailed frequency analysis and visualization.
-
--   **Features**:
-    -   Customizable FFT window size and overlap.
-    -   Adjustable frequency range (min/max Hz) with presets (Full, AudioRange, SpeechRange, MusicRange, Bass).
-    -   Adaptive mode for optimizing analysis of short audio segments.
-    -   Time range selection for specific analysis segments.
-    -   Automatic start/silence detection.
-    -   Frequency annotations for highlighting specific frequencies.
-    -   Outputs to PNG image.
-
-### `audiotools waveform` - Waveform Visualization
-Generate detailed waveform images from audio files, visualizing amplitude over time.
-
--   **Features**:
-    -   Display scale options: Amplitude or Decibel (dBFS).
-    -   Time range selection for specific visualization segments.
-    -   Automatic start/silence detection.
-    -   Time-based annotations for marking points of interest.
-    -   Option to show RMS (Root Mean Square) envelope.
-    -   Outputs to PNG image (currently supports WAV input for visualization).
-
-
-
-## Prerequisites
-
--   **Rust**: Latest stable version.
--   **FFmpeg**: Must be installed and accessible in your system's PATH. AudioTools CLI heavily relies on FFmpeg for audio processing and information extraction.
-
-### Installing FFmpeg
-
--   **Ubuntu/Debian**: `sudo apt-get update && sudo apt-get install ffmpeg`
--   **macOS**: `brew install ffmpeg`
--   **Windows**: Download from the [FFmpeg official website](https://ffmpeg.org/download.html) and ensure it's added to your system PATH.
-
-## Installation
-
-1.  **Clone the repository**:
-    ```bash
-    git clone https://github.com/tngsk/audiotools-cli.git
-    cd audiotools-cli
-    ```
-
-2.  **Build the project**:
-    ```bash
-    cargo build --release
-    ```
-    This will compile all sub-commands. The executables will be located in `target/release/`.
-    You can then add `target/release/` to your system's PATH or copy the executables to a directory already in your PATH (e.g., `/usr/local/bin`).
-
-## Usage
-
-All commands are invoked via the `audiotools` binary, followed by the specific sub-command. The `fmtr` utility is a separate binary.
-
-### `audiotools convert` Examples
+### ビルド
+プロジェクトのルートディレクトリで以下のコマンドを実行し、全ツールをビルドします。
 
 ```bash
-# Convert all WAV files in 'input_dir' to 24-bit FLAC with -1.0 dBFS peak normalization
-audiotools convert -i input_dir -O flac -b 24 --level -1.0 -r
-
-# Convert 'input.wav' to mono MP3 (320kbps)
-audiotools convert -i input.wav -O mp3 --channels 1
-
-# Convert all FLAC files in 'input_dir' to 16-bit WAV, output to 'output_dir', overwrite existing
-audiotools convert -i input_dir -O wav -b 16 -I flac -o output_dir --force -r
+cargo build --workspace --release
 ```
 
-### `audiotools normalize` Examples
+生成されたバイナリは `target/release/` に配置されます。
+
+## 設定 (config.yaml)
+
+カレントディレクトリに `config.yaml` が存在する場合、自動的に読み込まれてデフォルト値として使用されます。
+CLI引数で値を指定した場合は、設定ファイルの値よりもCLI引数が優先されます。
+
+**config.yaml の例**:
+
+```yaml
+global:
+  overwrite: false
+  recursive: true
+
+segment:
+  segment_len: 1.0
+  top_db: 30
+
+spectrogram:
+  width: 1200
+  height: 600
+  fmax: 20000
+  n_mels: 128
+  
+normalize:
+  level: -1.0
+```
+
+## 使用例
+
+### 1. 音声の分割 (segment-cli)
 
 ```bash
-# Normalize all WAV files in 'input_dir' to -3.0 dBFS, preserving format
-audiotools normalize -i input_dir --level -3.0 -r
+# default: config.yaml の設定を使用
+target/release/segment-cli --input raw_audio.wav --output-dir segments/
 
-# Normalize a single MP3 file to -0.5 dBFS, overwriting if it exists
-audiotools normalize -i audio.mp3 --level -0.5 --force
+# override: パラメータをCLIで指定
+target/release/segment-cli -i raw_audio.wav -o segments/ --segment-len 0.5 --top-db 40
 ```
 
-### `audiotools info` Examples
+### 2. 特徴量の抽出 (features-cli)
 
 ```bash
-# Get duration and bitrate for all audio files in 'input_dir' recursively
-audiotools info -i input_dir -f duration,bit_rate -r
-
-# Get full metadata for 'song.wav' and save to 'song_info.txt'
-audiotools info -i song.wav -o song_info.txt
+# フォルダ内の全WAVファイルから特徴量を抽出
+target/release/features-cli -i segments/ -o features.csv --format csv --recursive
 ```
 
-### `audiotools loudness` Examples
+### 3. PCA分析と可視化 (pca-cli)
 
 ```bash
-# Perform EBU R128 loudness analysis on all audio files in 'input_dir' recursively
-audiotools loudness -i input_dir -r
-
-# Analyze 'podcast.mp3' and save results to 'podcast_loudness.txt'
-audiotools loudness -i podcast.mp3 -o podcast_loudness.txt
+# 特徴量CSVからPCAを実行し、プロット画像を生成
+target/release/pca-cli -i features.csv -o pca_plot.png --components 2
 ```
 
-### `audiotools spectrum` Examples
+### 4. スペクトログラム生成 (spectrum-cli)
 
 ```bash
-# Generate a basic spectrogram for 'track.wav'
-audiotools spectrum -i track.wav -o track_spectrum.png
-
-# Generate a spectrogram with a specific window size, overlap, and frequency range
-audiotools spectrum -i track.wav -o track_detailed_spectrum.png --window-size 4096 --overlap 0.85 --min-freq 50 --max-freq 10000
-
-# Spectrogram with auto-start detection and music frequency preset
-audiotools spectrum -i vocal.wav -o vocal_auto_spectrum.png --auto-start --freq-preset MusicRange
-
-# Spectrogram with frequency annotations
-audiotools spectrum -i synth.wav -o synth_annotated.png --annotate "440:A4,880:A5"
+# スペクトログラムを生成（設定はconfig.yamlまたはデフォルト）
+target/release/spectrum-cli -i audio.wav -o spec.png
 ```
 
-### `audiotools waveform` Examples
+### 5. フォーマット変換 (convert-cli)
 
 ```bash
-# Generate a basic waveform for 'clip.wav' with decibel scale and RMS envelope
-audiotools waveform -i clip.wav -o clip_waveform.png --scale decibel --show-rms
-
-# Waveform with auto-start detection and time annotations
-audiotools waveform -i speech.wav -o speech_auto_waveform.png --auto-start --annotate "1.5:start,4.2:end"
-
-# Waveform for a specific time range (10 to 20 seconds)
-audiotools waveform -i long_track.wav -o long_track_segment.png --start 10 --end 20
+# WAVをFLACに変換
+target/release/convert-cli -i input_dir/ -O flac --recursive
 ```
 
+## 開発ルール
 
+本プロジェクトは以下のポリシーに従って開発されています：
+-   **モジュールの独立性**: 各CLIツールは独立して動作可能。
+-   **設定の統一**: `audiotools-core` を通じた共通設定管理。
+-   **Rust Way**: `thiserror` によるエラーハンドリング、`clap` による引数解析、`cargo` ワークスペース機能の活用。
 
-## Command Line Options
+## ライセンス
 
-Each sub-command has its own set of options. Run `audiotools <subcommand> --help` for detailed usage.
-
-Example: `audiotools convert --help`
-
-## Dependencies
-
-The project relies on the following key Rust crates:
-
--   `clap`: For robust command-line argument parsing.
--   `hound`: For reading and writing WAV files.
--   `plotters`: For powerful plotting and visualization capabilities (used in `spectrum` and `waveform`).
--   `rustfft`: For efficient Fast Fourier Transform computations (used in `spectrum`).
--   `walkdir`: For recursive directory traversal.
--   `rodio`: For audio playback and processing (used in `convert` and `normalize`).
--   `byteorder`: For handling byte order in binary data (used in `info`).
--   `serde` & `serde_json`: For serialization/deserialization, especially for `fmtr`.
--   `tokio`: For asynchronous operations.
--   `thiserror`: For custom error types.
--   `rand`: For random number generation.
-
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request or open an issue.
-
-## Acknowledgments
-
-This project heavily relies on [FFmpeg](https://ffmpeg.org/), an amazing open-source multimedia framework. Special thanks to the FFmpeg team and contributors for providing such a powerful and reliable tool that makes this project possible.
+MIT License

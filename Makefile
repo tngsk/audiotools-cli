@@ -3,11 +3,14 @@ TARGET_DIR = $(HOME)/bin
 
 # List of all independent CLI binaries
 CLI_BINARIES = \
-	spectrum-cli \
 	convert-cli \
+	features-cli \
 	info-cli \
 	loudness-cli \
 	normalize-cli \
+	pca-cli \
+	segment-cli \
+	spectrum-cli \
 	waveform-cli
 
 .PHONY: all build install clean
@@ -18,7 +21,7 @@ all: install
 # Build all CLI binaries in release mode
 build:
 	@echo "Building all CLI binaries..."
-cargo build --release
+	cargo build --release
 
 # Install all CLI binaries to target directory
 install: build
@@ -32,4 +35,4 @@ install: build
 # Clean build artifacts for the entire workspace
 clean:
 	@echo "Cleaning build artifacts..."
-cargo clean
+	cargo clean

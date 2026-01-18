@@ -10,3 +10,4 @@ plotters = "0.3.7"
 walkdir = "2.5.0"
 tokio = { version = "1", features = ["full"] }
 rodio = "0.20.1"
+audiotools-core = { path = "../core" }

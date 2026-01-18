@@ -7,3 +7,6 @@ edition = "2024"
 clap = { version = "4.5.20", features = ["cargo", "derive"] }
 walkdir = "2.5.0"
 tokio = { version = "1", features = ["full"] }
+audiotools-core = { path = "../core" }
+symphonia = { version = "0.5.5", features = ["all"] }
+ebur128 = "0.1.10"

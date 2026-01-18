@@ -9,3 +9,4 @@ walkdir = "2.5.0"
 hound = "3.5.1"
 rodio = "0.20.1"
 tokio = { version = "1", features = ["full"] }
+audiotools-core = { path = "../core" }

@@ -1,0 +1,15 @@
+[package]
+name = "audiotools-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+hound = "3.5"
+rodio = "0.19"
+rustfft = "6.2"
+num-complex = "0.4"
+# For common CLI args if needed, but core probably shouldn't depend on clap unless providing traits?
+# Keep core independent of clap if possible, or provide struct definitions that clap uses.

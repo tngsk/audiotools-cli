@@ -93,8 +93,11 @@ struct SpectrumArgs {
     annotations: Option<Vec<(f32, String)>>,
 }
 
+use audiotools_core::config::Config as AppConfig;
+
 #[tokio::main]
 async fn main() {
+    let app_config = AppConfig::load_default().unwrap_or_default();
     let cli = Cli::parse();
     let args = cli.args;
 
@@ -106,8 +109,32 @@ async fn main() {
         args.min_duration,
     );
 
+    // Resolve Spectrogram Config
+    let spec_config = app_config.spectrogram.unwrap_or_default();
+    
+    let width = spec_config.width.unwrap_or(1200);
+    let height = spec_config.height.unwrap_or(600);
+    
+    let window_size = if args.window_size != 2048 {
+        args.window_size
+    } else {
+        spec_config.n_fft.unwrap_or(2048)
+    };
+    
+    let min_freq = if (args.min_freq - 20.0).abs() > f32::EPSILON {
+        args.min_freq
+    } else {
+        0.0 // preset or default?
+    };
+    
+    let max_freq = if (args.max_freq - 20000.0).abs() > f32::EPSILON {
+         args.max_freq
+    } else {
+         spec_config.fmax.unwrap_or(20000.0)
+    };
+    
     // Build SpectrogramConfig using ConfigBuilder
-    let mut config_builder = ConfigBuilder::new().image_dimensions(1200, 600);
+    let mut config_builder = ConfigBuilder::new().image_dimensions(width, height);
 
     if let Some(preset) = args.freq_preset {
         // Use a default sample rate for preset calculation, actual will be from audio file
@@ -116,11 +143,11 @@ async fn main() {
             SpectrogramConfig::frequency_preset(preset.into(), default_sample_rate);
         config_builder = config_builder.frequency_range(p_min, p_max);
     } else {
-        config_builder = config_builder.frequency_range(args.min_freq, args.max_freq);
+        config_builder = config_builder.frequency_range(min_freq.max(args.min_freq), max_freq);
     }
 
-    if args.window_size != 0 && !args.adaptive {
-        config_builder = config_builder.window_size(args.window_size);
+    if window_size != 0 && !args.adaptive {
+        config_builder = config_builder.window_size(window_size);
     } else if args.adaptive {
         // When adaptive, window_size will be auto-configured based on duration
         // The actual duration will be passed to auto_configure inside SpectrumCommand.execute
@@ -163,7 +190,8 @@ async fn main() {
         SpectrumCommand::new(audio_loader, spectral_analyzer, spectrogram_renderer);
 
     // Handle recursive processing
-    if args.recursive {
+    let recursive = args.recursive || app_config.global.as_ref().and_then(|g| g.recursive).unwrap_or(false);
+    if recursive {
         // TODO: Implement batch processing for directories
         eprintln!(
             "Warning: Recursive processing for spectrum command is not yet fully implemented with the new architecture. Processing single file."

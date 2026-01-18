@@ -14,6 +14,8 @@ const DEFAULT_MP3_BITRATE: &str = "320k";
 const DEFAULT_FLAC_COMPRESSION: &str = "8";
 const CHANNEL_CONVERSION_FACTOR: f32 = 0.7071; // -3dB
 
+use audiotools_core::config::Config;
+
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Cli {
@@ -36,12 +38,12 @@ struct ConvertArgs {
     flatten: bool,
 
     /// Input formats to process (e.g., wav,flac,mp3)
-    #[arg(short = 'I', long, value_delimiter = ',', default_value = "wav")]
-    input_format: Vec<String>,
+    #[arg(short = 'I', long, value_delimiter = ',')]
+    input_format: Option<Vec<String>>,
 
     /// Target output format
-    #[arg(short = 'O', long, default_value = "wav")]
-    output_format: String,
+    #[arg(short = 'O', long)]
+    output_format: Option<String>,
 
     /// Output bit depth for WAV files
     #[arg(short, long, default_value = "16")]
@@ -60,11 +62,11 @@ struct ConvertArgs {
     postfix: Option<String>,
 
     /// Process directories recursively
-    #[arg(short, long)]
+    #[arg(short, long, default_value_t = false)]
     recursive: bool,
 
     /// Force overwrite of existing files
-    #[arg(long)]
+    #[arg(long, default_value_t = false)]
     force: bool,
 
     /// Number of output channels (1=mono, 2=stereo)
@@ -78,20 +80,50 @@ struct ConvertArgs {
 
 #[tokio::main]
 async fn main() {
+    let config = Config::load_default().unwrap_or_default();
     let cli = Cli::parse();
     let args = cli.args;
 
+    // Resolve defaults
+    let output_format = args.output_format
+        .or(config.convert.as_ref().and_then(|c| c.format.clone()))
+        .unwrap_or_else(|| "wav".to_string());
+        
+    let recursive = args.recursive || config.global.as_ref().and_then(|g| g.recursive).unwrap_or(false);
+    let force = args.force || config.global.as_ref().and_then(|g| g.overwrite).unwrap_or(false);
+
+    let normalize_level = args.normalize_level.or(config.normalize.as_ref().and_then(|n| n.level));
+    
+    // Subtype to bit_depth mapping
+    let bit_depth = if args.bit_depth != 16 {
+        args.bit_depth
+    } else {
+        // Try config
+        if let Some(subtype) = config.convert.as_ref().and_then(|c| c.subtype.clone()) {
+            match subtype.as_str() {
+                "PCM_16" => 16,
+                "PCM_24" => 24,
+                _ => 16, // Default or warn?
+            }
+        } else {
+            16
+        }
+    };
+    
+    // Input format default
+    let input_format_list = args.input_format.unwrap_or_else(|| vec!["wav".to_string()]);
+
     // Determine codec and extension based on output format
-    let (codec, out_ext) = match args.output_format.to_lowercase().as_str() {
+    let (codec, out_ext) = match output_format.to_lowercase().as_str() {
         "wav" => {
-            if !SUPPORTED_BIT_DEPTHS.contains(&args.bit_depth) {
+            if !SUPPORTED_BIT_DEPTHS.contains(&bit_depth) {
                 panic!(
                     "Unsupported bit depth for WAV. Supported depths are: {:?}",
                     SUPPORTED_BIT_DEPTHS
                 );
             }
             (
-                match args.bit_depth {
+                match bit_depth {
                     16 => "pcm_s16le",
                     24 => "pcm_s24le",
                     _ => unreachable!(),
@@ -109,9 +141,9 @@ async fn main() {
 
     // Convert input formats to lowercase for comparison
     let input_extensions: Vec<String> =
-        args.input_format.iter().map(|f| f.to_lowercase()).collect();
+        input_format_list.iter().map(|f| f.to_lowercase()).collect();
 
-    for entry in get_walker(&args.input, args.recursive) {
+    for entry in get_walker(&args.input, recursive) {
         if let Some(ext) = entry.path().extension() {
             let ext_str = ext.to_string_lossy().to_lowercase();
             if input_extensions.contains(&ext_str) {
@@ -143,7 +175,7 @@ async fn main() {
                     entry.path().with_file_name(filename)
                 };
 
-                if output.exists() && !args.force {
+                if output.exists() && !force {
                     println!(
                         "Skipped: {} (output file already exists. Use --force to overwrite)",
                         output.display()
@@ -154,14 +186,14 @@ async fn main() {
                 let mut cmd = Command::new("ffmpeg");
                 cmd.arg("-i").arg(entry.path());
 
-                if args.force {
+                if force {
                     cmd.arg("-y");
                 } else {
                     cmd.arg("-n");
                 }
 
                 // ノーマライズ処理の改善
-                if let Some(target_level) = args.normalize_level {
+                if let Some(target_level) = normalize_level {
                     match detect_peak_level(&entry.path().to_path_buf()) {
                         Ok(current_peak) => {
                             let gain = target_level - current_peak;
@@ -214,7 +246,7 @@ async fn main() {
                 }
 
                 // ファイル形式とコーデック
-                match args.output_format.as_str() {
+                match output_format.as_str() {
                     "mp3" => {
                         cmd.args(&["-b:a", DEFAULT_MP3_BITRATE]);
                     }

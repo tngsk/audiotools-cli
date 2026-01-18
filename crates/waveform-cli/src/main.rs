@@ -94,10 +94,20 @@ pub fn parse_time_annotation(s: &str) -> Result<(f32, String), String> {
     Ok((time, parts[1].to_string()))
 }
 
+use audiotools_core::config::Config as AppConfig;
+
 #[tokio::main]
 async fn main() {
+    let app_config = AppConfig::load_default().unwrap_or_default();
     let cli = Cli::parse();
     let args = cli.args;
+    
+    // Resolve params
+    let recursive = args.recursive || app_config.global.as_ref().and_then(|g| g.recursive).unwrap_or(false);
+    
+    let wave_config = app_config.waveform.unwrap_or_default();
+    let width = wave_config.width.unwrap_or(1200);
+    let height = wave_config.height.unwrap_or(600);
 
     let time_range = time::create_time_range(args.start, args.end);
     let auto_start_config = detection::create_auto_start_config(
@@ -107,7 +117,7 @@ async fn main() {
         args.min_duration,
     );
 
-    for entry in get_walker(&args.input, args.recursive) {
+    for entry in get_walker(&args.input, recursive) {
         if let Some(ext) = entry.path().extension() {
             if ext.to_string_lossy().to_lowercase() == "wav" {
                 let input_path = PathBuf::from(entry.path());
@@ -124,6 +134,8 @@ async fn main() {
                     auto_start_config.clone(),
                     args.annotations.clone(),
                     args.show_rms,
+                    width,
+                    height,
                 ) {
                     Ok(_) => println!(
                         "Created waveform: {} -> {}",
@@ -145,6 +157,8 @@ pub fn create_waveform(
     auto_start: Option<AutoStartDetection>,
     annotations: Option<Vec<(f32, String)>>,
     show_rms: bool,
+    width: u32,
+    height: u32,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut reader = WavReader::open(input)?;
     let spec = reader.spec();
@@ -208,7 +222,7 @@ pub fn create_waveform(
     let rms_values = calculate_rms(&samples, window_size);
 
     // プロット作成
-    let root = BitMapBackend::new(output.to_str().unwrap(), (1200, 600)).into_drawing_area();
+    let root = BitMapBackend::new(output.to_str().unwrap(), (width, height)).into_drawing_area();
     root.fill(&BACKGROUND_COLOR)?;
 
     let title = input

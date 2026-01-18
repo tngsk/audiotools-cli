@@ -17,6 +17,7 @@ walkdir = "2.5.0"
 tokio = { version = "1", features = ["full"] }
 thiserror = "1.0"
 rand = "0.8"
+audiotools-core = { path = "../core" }
 
 [dev-dependencies]
 tokio-test = "0.4"
