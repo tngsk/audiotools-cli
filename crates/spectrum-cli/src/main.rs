@@ -111,28 +111,28 @@ async fn main() {
 
     // Resolve Spectrogram Config
     let spec_config = app_config.spectrogram.unwrap_or_default();
-    
+
     let width = spec_config.width.unwrap_or(1200);
     let height = spec_config.height.unwrap_or(600);
-    
+
     let window_size = if args.window_size != 2048 {
         args.window_size
     } else {
         spec_config.n_fft.unwrap_or(2048)
     };
-    
+
     let min_freq = if (args.min_freq - 20.0).abs() > f32::EPSILON {
         args.min_freq
     } else {
         0.0 // preset or default?
     };
-    
+
     let max_freq = if (args.max_freq - 20000.0).abs() > f32::EPSILON {
-         args.max_freq
+        args.max_freq
     } else {
-         spec_config.fmax.unwrap_or(20000.0)
+        spec_config.fmax.unwrap_or(20000.0)
     };
-    
+
     // Build SpectrogramConfig using ConfigBuilder
     let mut config_builder = ConfigBuilder::new().image_dimensions(width, height);
 
@@ -190,7 +190,12 @@ async fn main() {
         SpectrumCommand::new(audio_loader, spectral_analyzer, spectrogram_renderer);
 
     // Handle recursive processing
-    let recursive = args.recursive || app_config.global.as_ref().and_then(|g| g.recursive).unwrap_or(false);
+    let recursive = args.recursive
+        || app_config
+            .global
+            .as_ref()
+            .and_then(|g| g.recursive)
+            .unwrap_or(false);
     if recursive {
         // TODO: Implement batch processing for directories
         eprintln!(

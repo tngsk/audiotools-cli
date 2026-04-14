@@ -1,15 +1,14 @@
+use anyhow::{Context, Result};
 use clap::Parser;
-use std::path::{Path, PathBuf};
-use anyhow::{Result, Context};
-use walkdir::WalkDir;
 use indicatif::ProgressBar;
 use std::fs::File;
-
+use std::path::{Path, PathBuf};
+use walkdir::WalkDir;
 
 mod features;
-use features::AudioFeatures;
-use audiotools_core::dsp::Stft;
 use audiotools_core::audio;
+use audiotools_core::dsp::Stft;
+use features::AudioFeatures;
 
 use audiotools_core::config::Config;
 
@@ -35,9 +34,14 @@ struct Args {
 fn main() -> Result<()> {
     let config = Config::load_default().unwrap_or_default();
     let args = Args::parse();
-    
+
     // Resolve params
-    let recursive = args.recursive || config.global.as_ref().and_then(|g| g.recursive).unwrap_or(false);
+    let recursive = args.recursive
+        || config
+            .global
+            .as_ref()
+            .and_then(|g| g.recursive)
+            .unwrap_or(false);
 
     // 1. Collect files
     let mut files = Vec::new();
@@ -60,7 +64,7 @@ fn main() -> Result<()> {
                 }
             }
         } else {
-             for entry in std::fs::read_dir(&args.input)? {
+            for entry in std::fs::read_dir(&args.input)? {
                 let entry = entry?;
                 if entry.file_type()?.is_file() {
                     if is_supported_audio(&entry.path(), &exts) {
@@ -77,9 +81,9 @@ fn main() -> Result<()> {
         println!("No audio files found.");
         return Ok(());
     }
-    
+
     println!("Found {} files to process.", files.len());
-    
+
     let mut results = Vec::new();
     let pb = ProgressBar::new(files.len() as u64);
 
@@ -89,21 +93,28 @@ fn main() -> Result<()> {
 
     for file_path in files {
         pb.inc(1);
-        
+
         match audio::load_audio(&file_path) {
             Ok((y, sr)) => {
                 let rms = features::calculate_rms(&y);
                 let zcr = features::calculate_zcr(&y);
-                
+
                 // STFT
                 let magnitudes = stft.compute_magnitude(&y);
-                
-                let (centroid, rolloff, flatness, flux) = 
+
+                let (centroid, rolloff, flatness, flux) =
                     features::calculate_spectral_features(&magnitudes, sr, n_fft);
-                
+
                 results.push(AudioFeatures {
-                    file_name: file_path.file_name().unwrap_or_default().to_string_lossy().to_string(),
-                    path: std::fs::canonicalize(&file_path).unwrap_or(file_path.clone()).to_string_lossy().to_string(),
+                    file_name: file_path
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_string(),
+                    path: std::fs::canonicalize(&file_path)
+                        .unwrap_or(file_path.clone())
+                        .to_string_lossy()
+                        .to_string(),
                     rms,
                     zero_crossing_rate: zcr,
                     spectral_centroid: centroid,
@@ -111,9 +122,9 @@ fn main() -> Result<()> {
                     spectral_flatness: flatness,
                     spectral_flux: flux,
                 });
-            },
+            }
             Err(e) => {
-                 eprintln!("Error processing {:?}: {}", file_path, e);
+                eprintln!("Error processing {:?}: {}", file_path, e);
             }
         }
     }
@@ -126,16 +137,21 @@ fn main() -> Result<()> {
 
     // Output
     let output_path = args.output.unwrap_or_else(|| {
-        let name = if args.format == "json" { "features.json" } else { "features.csv" };
+        let name = if args.format == "json" {
+            "features.json"
+        } else {
+            "features.csv"
+        };
         if args.input.is_dir() {
             args.input.join(name)
         } else {
             args.input.with_file_name(name)
         }
     });
-    
-    let file = File::create(&output_path).with_context(|| format!("Failed to create output file: {:?}", output_path))?;
-    
+
+    let file = File::create(&output_path)
+        .with_context(|| format!("Failed to create output file: {:?}", output_path))?;
+
     if args.format == "json" {
         serde_json::to_writer_pretty(file, &results)?;
     } else {
@@ -145,7 +161,7 @@ fn main() -> Result<()> {
         }
         wtr.flush()?;
     }
-    
+
     println!("Saved features to {:?}", output_path);
 
     Ok(())
@@ -156,9 +172,12 @@ fn is_supported_audio(path: &Path, extensions: &Option<Vec<String>>) -> bool {
         Some(e) => e.to_string_lossy().to_lowercase(),
         None => return false,
     };
-    
+
     if let Some(valid_exts) = extensions {
         return valid_exts.contains(&ext);
     }
-    matches!(ext.as_str(), "wav" | "mp3" | "flac" | "ogg" | "aiff" | "m4a")
+    matches!(
+        ext.as_str(),
+        "wav" | "mp3" | "flac" | "ogg" | "aiff" | "m4a"
+    )
 }

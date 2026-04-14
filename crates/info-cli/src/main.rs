@@ -18,7 +18,7 @@ struct AudioFileInfo {
     file_size: String,
     sample_rate: Option<u32>,
     bits_per_sample: Option<u32>, // Symphonia usually returns u32 for bits
-    channels: Option<u16>, // Symphonia channels count
+    channels: Option<u16>,        // Symphonia channels count
     duration: Option<f64>,
     total_samples: Option<u64>,
     time_precision: Option<f64>,
@@ -145,8 +145,13 @@ async fn main() {
     let config = Config::load_default().unwrap_or_default();
     let cli = Cli::parse();
     let args = cli.args;
-    
-    let recursive = args.recursive || config.global.as_ref().and_then(|g| g.recursive).unwrap_or(false);
+
+    let recursive = args.recursive
+        || config
+            .global
+            .as_ref()
+            .and_then(|g| g.recursive)
+            .unwrap_or(false);
 
     let mut output_file = args
         .output
@@ -163,9 +168,10 @@ async fn main() {
 
                 // Symphonia probe
                 if let Ok(info) = probe_audio(entry.path(), &ext_str, file_size.clone()) {
-                     let formatted_output = info.format_output(&args.output_format);
+                    let formatted_output = info.format_output(&args.output_format);
                     if let Some(file) = &mut output_file {
-                        writeln!(file, "{}", formatted_output).expect("Failed to write to output file");
+                        writeln!(file, "{}", formatted_output)
+                            .expect("Failed to write to output file");
                     } else {
                         println!("{}", formatted_output);
                     }
@@ -177,7 +183,11 @@ async fn main() {
     }
 }
 
-fn probe_audio(path: &Path, ext: &str, file_size: String) -> Result<AudioFileInfo, Box<dyn std::error::Error>> {
+fn probe_audio(
+    path: &Path,
+    ext: &str,
+    file_size: String,
+) -> Result<AudioFileInfo, Box<dyn std::error::Error>> {
     let src = File::open(path)?;
     let mss = MediaSourceStream::new(Box::new(src), Default::default());
 
@@ -187,49 +197,52 @@ fn probe_audio(path: &Path, ext: &str, file_size: String) -> Result<AudioFileInf
     let meta_opts: MetadataOptions = Default::default();
     let fmt_opts: FormatOptions = Default::default();
 
-    let probed = symphonia::default::get_probe()
-        .format(&hint, mss, &fmt_opts, &meta_opts)?;
+    let probed = symphonia::default::get_probe().format(&hint, mss, &fmt_opts, &meta_opts)?;
 
     let format = probed.format;
-    
+
     // Default track (usually the first audio track)
-    let track = format.tracks()
+    let track = format
+        .tracks()
         .iter()
         .find(|t| t.codec_params.codec != symphonia::core::codecs::CODEC_TYPE_NULL)
         .ok_or("No supported audio track found")?;
 
     let params = &track.codec_params;
-    
+
     let mut info = AudioFileInfo::new(
-        path.file_name().unwrap_or_default().to_string_lossy().to_string(),
+        path.file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string(),
         format_name(&format), // Basic format info
         file_size,
     );
-    
+
     info.sample_rate = params.sample_rate;
     info.channels = params.channels.map(|c| c.count() as u16);
     info.bits_per_sample = params.bits_per_sample;
     info.total_samples = params.n_frames;
 
     if let Some(sr) = info.sample_rate {
-         info.time_precision = Some(1.0 / sr as f64);
-         
-         // Calculate duration from frames if available
-         if let Some(frames) = params.n_frames {
-             info.duration = Some(frames as f64 / sr as f64);
-         } else {
-             // Try hint from format
-             // Cannot easily get duration if n_frames is missing without scanning.
-             // But some formats provide it?
-             // Symphonia doesn't expose duration directly on FormatReader unless calculated.
-             // We can check metadata tags potentially.
-         }
-         
-         if let (Some(ts), Some(tp)) = (info.total_samples, info.time_precision) {
-             info.sample_accurate_duration = Some(ts as f64 * tp);
-         }
+        info.time_precision = Some(1.0 / sr as f64);
+
+        // Calculate duration from frames if available
+        if let Some(frames) = params.n_frames {
+            info.duration = Some(frames as f64 / sr as f64);
+        } else {
+            // Try hint from format
+            // Cannot easily get duration if n_frames is missing without scanning.
+            // But some formats provide it?
+            // Symphonia doesn't expose duration directly on FormatReader unless calculated.
+            // We can check metadata tags potentially.
+        }
+
+        if let (Some(ts), Some(tp)) = (info.total_samples, info.time_precision) {
+            info.sample_accurate_duration = Some(ts as f64 * tp);
+        }
     }
-    
+
     Ok(info)
 }
 
@@ -238,6 +251,5 @@ fn format_name(_fmt: &Box<dyn symphonia::core::formats::FormatReader>) -> String
     // Symphonia doesn't explicitly expose a format name string easily in FormatReader trait?
     // We can infer from extension or probe result, but probe result consumed.
     // For now returning "Audio" or extension upper.
-    "Audio".to_string() 
+    "Audio".to_string()
 }
-

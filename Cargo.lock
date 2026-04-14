@@ -443,6 +443,7 @@ dependencies = [
  "clap",
  "hound",
  "rodio 0.20.1",
+ "symphonia",
  "tokio",
  "walkdir",
 ]
@@ -1304,6 +1305,7 @@ dependencies = [
  "clap",
  "hound",
  "rodio 0.20.1",
+ "symphonia",
  "tokio",
  "walkdir",
 ]
