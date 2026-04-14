@@ -1,7 +1,7 @@
+use anyhow::{Context, Result};
 use serde::Deserialize;
-use std::path::Path;
-use anyhow::{Result, Context};
 use std::fs;
+use std::path::Path;
 
 #[derive(Debug, Deserialize, Default, Clone)]
 pub struct Config {
@@ -60,19 +60,18 @@ pub struct NormalizeConfig {
     pub level: Option<f32>,
 }
 
-
 impl Config {
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let content = fs::read_to_string(path)?;
-        let config: Config = serde_yaml::from_str(&content)
-            .context("Failed to parse config file")?;
+        let config: Config =
+            serde_yaml::from_str(&content).context("Failed to parse config file")?;
         Ok(config)
     }
 
     pub fn load_default() -> Result<Self> {
         // Try loading from current dir `config.yaml`
         if Path::new("config.yaml").exists() {
-             return Self::load_from_file("config.yaml");
+            return Self::load_from_file("config.yaml");
         }
         Ok(Self::default())
     }

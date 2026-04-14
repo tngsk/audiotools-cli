@@ -7,12 +7,12 @@ mod utils;
 use crate::utils::{format_size, get_walker, is_audio_file};
 
 use audiotools_core::config::Config;
+use ebur128::{EbuR128, Mode};
+use symphonia::core::audio::SampleBuffer;
 use symphonia::core::formats::FormatOptions;
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
-use symphonia::core::audio::SampleBuffer;
-use ebur128::{EbuR128, Mode};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -41,8 +41,13 @@ async fn main() {
     let config = Config::load_default().unwrap_or_default();
     let cli = Cli::parse();
     let args = cli.args;
-    
-    let recursive = args.recursive || config.global.as_ref().and_then(|g| g.recursive).unwrap_or(false);
+
+    let recursive = args.recursive
+        || config
+            .global
+            .as_ref()
+            .and_then(|g| g.recursive)
+            .unwrap_or(false);
 
     let mut output_file = args
         .output
@@ -103,12 +108,12 @@ fn measure_loudness(path: &Path, ext: &str) -> Result<String, Box<dyn std::error
     let meta_opts: MetadataOptions = Default::default();
     let fmt_opts: FormatOptions = Default::default();
 
-    let probed = symphonia::default::get_probe()
-        .format(&hint, mss, &fmt_opts, &meta_opts)?;
+    let probed = symphonia::default::get_probe().format(&hint, mss, &fmt_opts, &meta_opts)?;
 
     let mut format = probed.format;
-    
-    let track = format.tracks()
+
+    let track = format
+        .tracks()
         .iter()
         .find(|t| t.codec_params.codec != symphonia::core::codecs::CODEC_TYPE_NULL)
         .ok_or("No supported audio track found")?;
@@ -118,7 +123,7 @@ fn measure_loudness(path: &Path, ext: &str) -> Result<String, Box<dyn std::error
     let channels = params.channels.ok_or("Unknown channels")?.count() as u32;
 
     let mut decoder = symphonia::default::get_codecs().make(params, &Default::default())?;
-    
+
     let mut ebu = EbuR128::new(channels, sample_rate, Mode::I | Mode::LRA | Mode::TRUE_PEAK)?;
 
     let mut sample_buf: Option<SampleBuffer<f32>> = None;
@@ -140,7 +145,7 @@ fn measure_loudness(path: &Path, ext: &str) -> Result<String, Box<dyn std::error
 
     let integrated = ebu.loudness_global()?;
     let lra = ebu.loudness_range()?;
-    
+
     let mut true_peaks = Vec::new();
     for i in 0..channels {
         true_peaks.push(ebu.true_peak(i)?);

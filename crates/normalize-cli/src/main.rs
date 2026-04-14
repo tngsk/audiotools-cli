@@ -48,14 +48,25 @@ async fn main() {
     let config = Config::load_default().unwrap_or_default();
     let cli = Cli::parse();
     let args = cli.args;
-    
+
     // Resolve defaults
-    let level = args.level
+    let level = args
+        .level
         .or(config.normalize.as_ref().and_then(|n| n.level))
         .unwrap_or(-1.0);
-        
-    let recursive = args.recursive || config.global.as_ref().and_then(|g| g.recursive).unwrap_or(false);
-    let force = args.force || config.global.as_ref().and_then(|g| g.overwrite).unwrap_or(false);
+
+    let recursive = args.recursive
+        || config
+            .global
+            .as_ref()
+            .and_then(|g| g.recursive)
+            .unwrap_or(false);
+    let force = args.force
+        || config
+            .global
+            .as_ref()
+            .and_then(|g| g.overwrite)
+            .unwrap_or(false);
 
     // 入力フォーマットを小文字に変換
     let input_format_list = args.input_format.unwrap_or_else(|| vec!["wav".to_string()]);
@@ -87,7 +98,6 @@ async fn main() {
                             &[ext_str],
                             "wav",
                             24,
-                            None,
                             None,
                             Some(&format!("_normalized_{}dB", level)),
                             false,

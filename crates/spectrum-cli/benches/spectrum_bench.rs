@@ -3,10 +3,10 @@ use audiotools::command::spectrum::core::analysis::DefaultSpectralAnalyzer;
 use audiotools::command::spectrum::core::config::{SpectrogramConfig, WindowType};
 use audiotools::command::spectrum::domain::request::{SpectrumOptions, SpectrumRequest};
 use audiotools::command::spectrum::testing::{
-    create_chirp_audio, create_harmonic_audio, create_test_audio, MockAudioLoader,
-    MockSpectrogramRenderer,
+    MockAudioLoader, MockSpectrogramRenderer, create_chirp_audio, create_harmonic_audio,
+    create_test_audio,
 };
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use std::path::PathBuf;
 
 fn benchmark_fft_processing(c: &mut Criterion) {

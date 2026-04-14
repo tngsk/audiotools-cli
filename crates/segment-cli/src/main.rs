@@ -1,8 +1,8 @@
-use clap::Parser;
-use std::path::{Path, PathBuf};
 use anyhow::Result;
-use walkdir::WalkDir;
+use clap::Parser;
 use indicatif::ProgressBar;
+use std::path::{Path, PathBuf};
+use walkdir::WalkDir;
 
 use audiotools_core::config::Config;
 
@@ -38,20 +38,26 @@ struct Args {
 fn main() -> Result<()> {
     let config = Config::load_default().unwrap_or_default();
     let args = Args::parse();
-    
+
     // Resolve parameters
     let seg_config = config.segment.unwrap_or_default();
-    
-    let segment_len = args.segment_len
-        .or(seg_config.segment_len)
-        .unwrap_or(2.0);
-        
-    let top_db = args.top_db
-        .or(seg_config.top_db)
-        .unwrap_or(20);
-        
-    let recursive = args.recursive || config.global.as_ref().and_then(|g| g.recursive).unwrap_or(false);
-    let overwrite = args.overwrite || config.global.as_ref().and_then(|g| g.overwrite).unwrap_or(false);
+
+    let segment_len = args.segment_len.or(seg_config.segment_len).unwrap_or(2.0);
+
+    let top_db = args.top_db.or(seg_config.top_db).unwrap_or(20);
+
+    let recursive = args.recursive
+        || config
+            .global
+            .as_ref()
+            .and_then(|g| g.recursive)
+            .unwrap_or(false);
+    let overwrite = args.overwrite
+        || config
+            .global
+            .as_ref()
+            .and_then(|g| g.overwrite)
+            .unwrap_or(false);
 
     // 1. Collect files
     let mut files = Vec::new();
@@ -99,7 +105,9 @@ fn main() -> Result<()> {
     let segmenter = AudioSegmenter::new(segment_len, top_db);
 
     // 3. Output directory
-    let output_root = args.output.unwrap_or_else(|| PathBuf::from("segments_output"));
+    let output_root = args
+        .output
+        .unwrap_or_else(|| PathBuf::from("segments_output"));
     if !output_root.exists() {
         std::fs::create_dir_all(&output_root)?;
     }
@@ -107,7 +115,7 @@ fn main() -> Result<()> {
 
     // 4. Process
     let pb = ProgressBar::new(files.len() as u64);
-    
+
     for file_path in files {
         pb.inc(1);
         // Load
@@ -116,15 +124,17 @@ fn main() -> Result<()> {
                 // Segment
                 let segments = segmenter.segment_audio(&y, sr);
                 if segments.is_empty() {
-                     // println!("No segments generated for {:?}", file_path);
-                     continue;
+                    // println!("No segments generated for {:?}", file_path);
+                    continue;
                 }
-                
+
                 // Save
-                if let Err(e) = segmenter.save_segments(&segments, sr, &file_path, &output_root, overwrite) {
+                if let Err(e) =
+                    segmenter.save_segments(&segments, sr, &file_path, &output_root, overwrite)
+                {
                     eprintln!("Error saving segments for {:?}: {}", file_path, e);
                 }
-            },
+            }
             Err(e) => {
                 eprintln!("Error loading {:?}: {}", file_path, e);
             }
@@ -140,11 +150,14 @@ fn is_supported_audio(path: &Path, extensions: &Option<Vec<String>>) -> bool {
         Some(e) => e.to_string_lossy().to_lowercase(),
         None => return false,
     };
-    
+
     if let Some(valid_exts) = extensions {
         return valid_exts.contains(&ext);
     }
-    
+
     // Default extensions
-    matches!(ext.as_str(), "wav" | "mp3" | "flac" | "ogg" | "aiff" | "m4a")
+    matches!(
+        ext.as_str(),
+        "wav" | "mp3" | "flac" | "ogg" | "aiff" | "m4a"
+    )
 }

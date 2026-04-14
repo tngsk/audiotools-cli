@@ -101,10 +101,15 @@ async fn main() {
     let app_config = AppConfig::load_default().unwrap_or_default();
     let cli = Cli::parse();
     let args = cli.args;
-    
+
     // Resolve params
-    let recursive = args.recursive || app_config.global.as_ref().and_then(|g| g.recursive).unwrap_or(false);
-    
+    let recursive = args.recursive
+        || app_config
+            .global
+            .as_ref()
+            .and_then(|g| g.recursive)
+            .unwrap_or(false);
+
     let wave_config = app_config.waveform.unwrap_or_default();
     let width = wave_config.width.unwrap_or(1200);
     let height = wave_config.height.unwrap_or(600);
