@@ -15,23 +15,19 @@ pub fn load_audio(path: &Path) -> Result<(Vec<f32>, u32)> {
 fn load_wav(reader: WavReader<BufReader<File>>) -> Result<(Vec<f32>, u32)> {
     let spec = reader.spec();
     let sample_rate = spec.sample_rate;
-    let samples: Vec<f32>;
-
-    match spec.sample_format {
-        hound::SampleFormat::Float => {
-            samples = reader
-                .into_samples::<f32>()
-                .collect::<Result<Vec<_>, _>>()?;
-        }
+    let samples: Vec<f32> = match spec.sample_format {
+        hound::SampleFormat::Float => reader
+            .into_samples::<f32>()
+            .collect::<Result<Vec<_>, _>>()?,
         hound::SampleFormat::Int => {
             let bits = spec.bits_per_sample;
             let max_val = 2.0_f32.powi(bits as i32 - 1);
-            samples = reader
+            reader
                 .into_samples::<i32>()
                 .map(|s| s.map(|x| x as f32 / max_val))
-                .collect::<Result<Vec<_>, _>>()?;
+                .collect::<Result<Vec<_>, _>>()?
         }
-    }
+    };
 
     let channels = spec.channels as usize;
     if channels > 1 {
