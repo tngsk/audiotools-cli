@@ -30,21 +30,24 @@ impl Stft {
     }
 
     pub fn compute_magnitude(&self, signal: &[f32]) -> Vec<Vec<f32>> {
-        let mut magnitudes = Vec::new();
+        // Pre-calculate capacity to avoid Vec reallocation during processing
+        let frames = (signal.len().saturating_sub(self.frame_size)) / self.hop_size + 1;
+        let mut magnitudes = Vec::with_capacity(frames);
         let mut i = 0;
 
+        // Allocate buffer once to avoid continuous allocations in the inner loop (drastically improves performance)
+        let mut buffer = vec![Complex::new(0.0, 0.0); self.frame_size];
+
         while i + self.frame_size <= signal.len() {
-            let mut buffer: Vec<Complex<f32>> = signal[i..i + self.frame_size]
-                .iter()
-                .zip(&self.window)
-                .map(|(&x, &w)| Complex::new(x * w, 0.0))
-                .collect();
+            let chunk = &signal[i..i + self.frame_size];
+            for (j, (&x, &w)) in chunk.iter().zip(&self.window).enumerate() {
+                buffer[j] = Complex::new(x * w, 0.0);
+            }
 
             self.fft.process(&mut buffer);
 
-            let mag: Vec<f32> = buffer
+            let mag: Vec<f32> = buffer[..self.frame_size / 2 + 1]
                 .iter()
-                .take(self.frame_size / 2 + 1)
                 .map(|c| c.norm())
                 .collect();
 
