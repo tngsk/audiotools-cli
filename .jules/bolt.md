@@ -4,3 +4,7 @@
 - `calculate_zcr` used a complex condition spanning four checks which is slow due to heavy logical branches in the iteration. Replacing it with `(y[i] >= 0.0) != (y[i - 1] >= 0.0)` dramatically speeds it up.
 
 **Action:** Whenever iterating heavily in DSP logic such as STFT loops, ensure allocations are hoisted out of the tight loops. Always simplify logical branches when calculating boolean properties over arrays.
+
+## 2024-05-19 - Cached FftPlanner for huge performance boost
+**Learning:** `rustfft::FftPlanner::new()` and `plan_fft_forward()` are extremely expensive to call inside an audio processing loop (like `process_frame` in `spectrum-cli`). They allocate memory and compute plans that could be reused.
+**Action:** When performing STFT or processing multiple audio frames, initialize the `FftPlanner` once and cache the resulting `Arc<dyn rustfft::Fft<f32>>` in the processor struct. Pre-allocate any buffers used within the loop and copy values instead of using `iter().map().collect()` to prevent continuous reallocation overhead.

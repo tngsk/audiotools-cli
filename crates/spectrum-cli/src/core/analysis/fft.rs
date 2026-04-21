@@ -1,19 +1,24 @@
 use crate::core::analysis::windowing;
 use crate::core::config::SpectrogramConfig;
 use crate::error::SpectrumError;
-use rustfft::{FftPlanner, num_complex::Complex};
+use rustfft::{num_complex::Complex, FftPlanner};
+use std::sync::Arc;
 
 /// Simple FFT processor for spectrogram generation
 pub struct FFTProcessor {
     config: SpectrogramConfig,
     window: Vec<f32>,
+    fft: Arc<dyn rustfft::Fft<f32>>,
 }
 
 impl FFTProcessor {
     /// Create a new FFT processor
     pub fn new(config: SpectrogramConfig) -> Self {
         let window = windowing::generate_hanning_window(config.window_size);
-        Self { config, window }
+        let mut planner = FftPlanner::new();
+        let fft = planner.plan_fft_forward(config.window_size);
+
+        Self { config, window, fft }
     }
 
     /// Process a single frame of audio samples
@@ -26,17 +31,15 @@ impl FFTProcessor {
             )));
         }
 
-        // Apply window function and convert to complex
-        let mut buffer: Vec<Complex<f32>> = samples
-            .iter()
-            .zip(self.window.iter())
-            .map(|(&sample, &window_val)| Complex::new(sample * window_val, 0.0))
-            .collect();
+        // Allocate buffer once and map to complex
+        // We use a pre-allocated vector to avoid the overhead of map().collect() and FftPlanner::new() inside the loop.
+        let mut buffer = vec![Complex::new(0.0, 0.0); self.config.window_size];
+        for (j, (&sample, &window_val)) in samples.iter().zip(self.window.iter()).enumerate() {
+            buffer[j] = Complex::new(sample * window_val, 0.0);
+        }
 
-        // Perform FFT
-        let mut planner = FftPlanner::new();
-        let fft = planner.plan_fft_forward(self.config.window_size);
-        fft.process(&mut buffer);
+        // Perform FFT using the cached plan
+        self.fft.process(&mut buffer);
 
         // Convert to magnitude spectrum
         Ok(self.compute_magnitude_spectrum(&buffer))
