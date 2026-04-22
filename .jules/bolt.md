@@ -8,3 +8,10 @@
 ## 2024-05-19 - Cached FftPlanner for huge performance boost
 **Learning:** `rustfft::FftPlanner::new()` and `plan_fft_forward()` are extremely expensive to call inside an audio processing loop (like `process_frame` in `spectrum-cli`). They allocate memory and compute plans that could be reused.
 **Action:** When performing STFT or processing multiple audio frames, initialize the `FftPlanner` once and cache the resulting `Arc<dyn rustfft::Fft<f32>>` in the processor struct. Pre-allocate any buffers used within the loop and copy values instead of using `iter().map().collect()` to prevent continuous reallocation overhead.
+
+## 2024-06-25 - Combined running averages in `calculate_spectral_features`
+**Learning:**
+- In `calculate_spectral_features` (used by `features-cli`), the code previously collected `centroids`, `rolloffs`, and `flatnesses` inside a frame-loop as intermediate `Vec<f32>`, and also contained multiple inner loops calculating things like sum and log sum over `magnitudes`.
+- Converting these multiple distinct `Vec` accumulations into running scalar sums, and combining the multiple iterations into a single `zip` loop avoids allocation overhead and redundant iterations over elements.
+
+**Action:** Whenever calculating multiple metrics across a vector simultaneously, iterate over the vector *once* where possible, computing all required metrics in a single pass. Don't use a `Vec` for intermediate frames if you only need the final average.
