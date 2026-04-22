@@ -37,60 +37,61 @@ pub fn calculate_spectral_features(
 ) -> (f32, f32, f32, f32) {
     // Calculates: Centroid, Rolloff, Flatness, Flux (Mean)
 
-    let mut centroids = Vec::new();
-    let mut rolloffs = Vec::new();
-    let mut flatnesses = Vec::new(); // fluxes is now calculated via core
-
     // Frequency bins
     let bin_freqs: Vec<f32> = (0..=n_fft / 2)
         .map(|i| i as f32 * sr as f32 / n_fft as f32)
         .collect();
 
-    for (i, mag) in magnitudes.iter().enumerate() {
-        // Centroid & Rolloff
+    // Sum variables for running average to avoid Vec allocation per-frame
+    let mut sum_centroid = 0.0;
+    let mut sum_rolloff = 0.0;
+    let mut sum_flatness = 0.0;
+
+    for mag in magnitudes.iter() {
         let mut sum_mag = 0.0;
         let mut sum_freq_mag = 0.0;
+        let mut sum_log = 0.0;
 
-        for (bin, &val) in mag.iter().enumerate() {
+        // Combine iteration for magnitude, frequency weighting, and log-sum for Flatness
+        for (val, freq) in mag.iter().zip(bin_freqs.iter()) {
             sum_mag += val;
-            sum_freq_mag += val * bin_freqs[bin];
+            sum_freq_mag += val * freq;
+            sum_log += (val + 1e-10).ln();
         }
 
         // Centroid
         if sum_mag > 1e-9 {
-            centroids.push(sum_freq_mag / sum_mag);
-        } else {
-            centroids.push(0.0);
+            sum_centroid += sum_freq_mag / sum_mag;
         }
 
         // Rolloff (0.85)
         let threshold = 0.85 * sum_mag;
         let mut cum_sum = 0.0;
         let mut rolloff_freq = 0.0;
-        for (bin, &val) in mag.iter().enumerate() {
+        for (val, freq) in mag.iter().zip(bin_freqs.iter()) {
             cum_sum += val;
             if cum_sum >= threshold {
-                rolloff_freq = bin_freqs[bin];
+                rolloff_freq = *freq;
                 break;
             }
         }
-        rolloffs.push(rolloff_freq);
+        sum_rolloff += rolloff_freq;
 
         // Flatness
         // GeoMean / AriMean
-        // Add minimal value to avoid log(0)
-        let sum_log: f32 = mag.iter().map(|&x| (x + 1e-10).ln()).sum();
         let geom_mean = (sum_log / mag.len() as f32).exp();
         let ari_mean = (sum_mag + 1e-10 * mag.len() as f32) / mag.len() as f32;
-        flatnesses.push(geom_mean / ari_mean);
+        sum_flatness += geom_mean / ari_mean;
     }
 
     // Core flux calculation
     let fluxes = spectral_flux(magnitudes);
 
-    let avg_centroid = centroids.iter().sum::<f32>() / centroids.len().max(1) as f32;
-    let avg_rolloff = rolloffs.iter().sum::<f32>() / rolloffs.len().max(1) as f32;
-    let avg_flatness = flatnesses.iter().sum::<f32>() / flatnesses.len().max(1) as f32;
+    let n_frames = magnitudes.len().max(1) as f32;
+    let avg_centroid = sum_centroid / n_frames;
+    let avg_rolloff = sum_rolloff / n_frames;
+    let avg_flatness = sum_flatness / n_frames;
+
     let avg_flux = fluxes.iter().sum::<f32>() / fluxes.len().max(1) as f32;
 
     (avg_centroid, avg_rolloff, avg_flatness, avg_flux)
