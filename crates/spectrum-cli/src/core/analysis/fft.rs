@@ -1,7 +1,7 @@
 use crate::core::analysis::windowing;
 use crate::core::config::SpectrogramConfig;
 use crate::error::SpectrumError;
-use rustfft::{num_complex::Complex, FftPlanner};
+use rustfft::{FftPlanner, num_complex::Complex};
 use std::sync::Arc;
 
 /// Simple FFT processor for spectrogram generation
@@ -18,7 +18,11 @@ impl FFTProcessor {
         let mut planner = FftPlanner::new();
         let fft = planner.plan_fft_forward(config.window_size);
 
-        Self { config, window, fft }
+        Self {
+            config,
+            window,
+            fft,
+        }
     }
 
     /// Process a single frame of audio samples
@@ -56,11 +60,19 @@ impl FFTProcessor {
             _ => 2.0,
         };
 
+        // Pre-calculate squared scale factor to avoid square root inside the loop
+        // We use norm_sqr() instead of norm() and adjust using 10 * log10(x^2) == 20 * log10(x)
+        let scale_factor = window_compensation / self.config.window_size as f32;
+        let scale_factor_sqr = scale_factor * scale_factor;
+
         for bin in 0..self.config.freq_bins() {
             let db_value = if bin < fft_output.len() {
-                let magnitude = fft_output[bin].norm() / self.config.window_size as f32;
-                let adjusted = magnitude * window_compensation;
-                20.0 * adjusted.max(1e-12).log10().max(-120.0)
+                let norm_sqr = fft_output[bin].norm_sqr();
+                let adjusted_sqr = norm_sqr * scale_factor_sqr;
+
+                // Using 10.0 * log10 instead of 20.0 * log10 because we are operating on squared magnitude
+                // 1e-24 is the squared equivalent of the old 1e-12 max boundary.
+                10.0 * adjusted_sqr.max(1e-24).log10().max(-120.0)
             } else {
                 -120.0
             };
