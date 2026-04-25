@@ -15,3 +15,7 @@
 - We can instead calculate the magnitude squared (`norm_sqr()`), which avoids the `sqrt` operation completely. Since `10 * log10(x^2)` is mathematically equivalent to `20 * log10(x)`, we can substitute it into the loop along with a squared scaling factor, yielding ~25% faster execution for large spectrogram conversions.
 
 **Action:** Whenever converting complex numbers to decibels, prefer using `norm_sqr()` combined with `10.0 * log10()` instead of `norm()` and `20.0 * log10()`. Ensure any scale factors applied to the magnitude are squared beforehand outside of the loop.
+
+## 2026-04-25 - Hoisted channel conversion logic outside of sample loop
+**Learning:** The channel configuration does not change during the file processing, so putting the `if input_channels == 1 && output_channels == 2 { ... }` logic inside the sample `loop` causes millions of branch evaluations per audio file, degrading performance.
+**Action:** Hoist static conditional checks outside of tight processing loops. Determine the processing path once, and then use dedicated loops for each processing strategy to avoid per-sample branch evaluation.

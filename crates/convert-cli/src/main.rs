@@ -4,14 +4,14 @@ use std::io::BufReader;
 use std::path::PathBuf;
 
 mod utils;
-use crate::utils::detection::detect_peak_level;
-use crate::utils::get_walker;
+use utils::detection::detect_peak_level;
+use utils::get_walker;
 
 // 定数の定義
 const SUPPORTED_FORMATS: &[&str] = &["wav"];
 const SUPPORTED_BIT_DEPTHS: &[u8] = &[16, 24];
 
-const CHANNEL_CONVERSION_FACTOR: f32 = 0.7071; // -3dB
+const CHANNEL_CONVERSION_FACTOR: f32 = std::f32::consts::FRAC_1_SQRT_2; // -3dB, fixed clippy warning while at it
 
 use audiotools_core::config::Config;
 
@@ -237,39 +237,32 @@ async fn main() {
 
                 let mut sample_iter = decoder.into_iter();
 
-                loop {
-                    if input_channels == 1 && output_channels == 2 {
-                        // Mono to Stereo
-                        if let Some(sample) = sample_iter.next() {
-                            let val = (sample as f32 / i16::MAX as f32) * gain_multiplier;
-                            let val = val.clamp(-1.0, 1.0) * max_val;
-                            writer.write_sample(val as i32).unwrap();
-                            writer.write_sample(val as i32).unwrap();
-                        } else {
-                            break;
-                        }
-                    } else if input_channels == 2 && output_channels == 1 {
-                        // Stereo to Mono
-                        if let (Some(l), Some(r)) = (sample_iter.next(), sample_iter.next()) {
-                            let l_val = l as f32 / i16::MAX as f32;
-                            let r_val = r as f32 / i16::MAX as f32;
-                            let val = (l_val * CHANNEL_CONVERSION_FACTOR
-                                + r_val * CHANNEL_CONVERSION_FACTOR)
-                                * gain_multiplier;
-                            let val = val.clamp(-1.0, 1.0) * max_val;
-                            writer.write_sample(val as i32).unwrap();
-                        } else {
-                            break;
-                        }
-                    } else {
-                        // Keep channels
-                        if let Some(sample) = sample_iter.next() {
-                            let val = (sample as f32 / i16::MAX as f32) * gain_multiplier;
-                            let val = val.clamp(-1.0, 1.0) * max_val;
-                            writer.write_sample(val as i32).unwrap();
-                        } else {
-                            break;
-                        }
+                // Optimization: Channel check hoisted outside the loop to prevent per-sample branch evaluation
+                if input_channels == 1 && output_channels == 2 {
+                    // Mono to Stereo
+                    for sample in sample_iter {
+                        let val = (sample as f32 / i16::MAX as f32) * gain_multiplier;
+                        let val = val.clamp(-1.0, 1.0) * max_val;
+                        writer.write_sample(val as i32).unwrap();
+                        writer.write_sample(val as i32).unwrap();
+                    }
+                } else if input_channels == 2 && output_channels == 1 {
+                    // Stereo to Mono
+                    while let (Some(l), Some(r)) = (sample_iter.next(), sample_iter.next()) {
+                        let l_val = l as f32 / i16::MAX as f32;
+                        let r_val = r as f32 / i16::MAX as f32;
+                        let val = (l_val * CHANNEL_CONVERSION_FACTOR
+                            + r_val * CHANNEL_CONVERSION_FACTOR)
+                            * gain_multiplier;
+                        let val = val.clamp(-1.0, 1.0) * max_val;
+                        writer.write_sample(val as i32).unwrap();
+                    }
+                } else {
+                    // Keep channels
+                    for sample in sample_iter {
+                        let val = (sample as f32 / i16::MAX as f32) * gain_multiplier;
+                        let val = val.clamp(-1.0, 1.0) * max_val;
+                        writer.write_sample(val as i32).unwrap();
                     }
                 }
 
