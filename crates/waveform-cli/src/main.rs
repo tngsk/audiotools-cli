@@ -375,18 +375,39 @@ pub fn create_waveform(
 }
 
 fn calculate_rms(samples: &[f32], window_size: usize) -> Vec<f32> {
+    if samples.is_empty() {
+        return Vec::new();
+    }
     let mut rms_values = Vec::with_capacity(samples.len());
-    for i in 0..samples.len() {
-        let start = if i < window_size / 2 {
-            0
-        } else {
-            i - window_size / 2
-        };
-        let end = (i + window_size / 2).min(samples.len());
+    let half_window = window_size / 2;
 
-        let sum_squares: f32 = samples[start..end].iter().map(|&x| x * x).sum();
-        let rms = (sum_squares / (end - start) as f32).sqrt();
-        rms_values.push(rms);
+    let mut current_sum_sq = 0.0;
+    let mut current_start = 0;
+    let mut current_end = 0;
+
+    for i in 0..samples.len() {
+        let target_start = if i < half_window { 0 } else { i - half_window };
+        let target_end = (i + half_window).min(samples.len());
+
+        // Slide the end pointer forward
+        while current_end < target_end {
+            let x = samples[current_end];
+            current_sum_sq += x * x;
+            current_end += 1;
+        }
+
+        // Slide the start pointer forward
+        while current_start < target_start {
+            let x = samples[current_start];
+            current_sum_sq -= x * x;
+            current_start += 1;
+        }
+
+        // Float precision can sometimes cause sum_sq to drop slightly below 0
+        current_sum_sq = current_sum_sq.max(0.0);
+
+        let count = (target_end - target_start) as f32;
+        rms_values.push((current_sum_sq / count).sqrt());
     }
     rms_values
 }

@@ -19,3 +19,7 @@
 ## 2026-04-25 - Hoisted channel conversion logic outside of sample loop
 **Learning:** The channel configuration does not change during the file processing, so putting the `if input_channels == 1 && output_channels == 2 { ... }` logic inside the sample `loop` causes millions of branch evaluations per audio file, degrading performance.
 **Action:** Hoist static conditional checks outside of tight processing loops. Determine the processing path once, and then use dedicated loops for each processing strategy to avoid per-sample branch evaluation.
+
+## 2026-04-26 - Optimize overlapping window iterations using sliding window approach
+**Learning:** Calculating an aggregated value (such as a sum or average squared value for RMS) over a window iteratively across a large array of audio samples can become a major bottleneck if computed naively, resulting in O(N*W) complexity.
+**Action:** Use sliding window sums for rolling window calculations over large audio sample arrays. Maintain the running sum incrementally by adding the new incoming sample to the window edge and subtracting the outgoing sample from the opposite edge. This brings the time complexity down to O(N) which scales massively better on long audio streams.
