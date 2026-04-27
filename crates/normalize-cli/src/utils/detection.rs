@@ -22,12 +22,6 @@ impl Default for AutoStartDetection {
 }
 
 impl AutoStartDetection {
-    // RMSエネルギーを計算する関数
-    fn calculate_rms(window: &[f32]) -> f32 {
-        let sum_squares: f32 = window.iter().map(|&x| x * x).sum();
-        (sum_squares / window.len() as f32).sqrt()
-    }
-
     // ゼロクロッシングを検出する関数
     fn is_zero_crossing(a: f32, b: f32) -> bool {
         (a < 0.0 && b >= 0.0) || (a >= 0.0 && b < 0.0)
@@ -38,9 +32,24 @@ impl AutoStartDetection {
         let mut triggered = false;
         let mut potential_start = 0;
 
-        for i in 0..samples.len().saturating_sub(self.window_size) {
-            let window = &samples[i..i + self.window_size];
-            let rms = Self::calculate_rms(window);
+        if samples.len() < self.window_size {
+            return None;
+        }
+
+        // Calculate initial sum of squares for the first window
+        let mut current_sum_sq: f64 = samples[0..self.window_size].iter().map(|&x| (x as f64) * (x as f64)).sum();
+
+        for i in 0..=samples.len().saturating_sub(self.window_size) {
+            // Update sliding window sum of squares for O(1) performance instead of O(N)
+            if i > 0 {
+                let outgoing = samples[i - 1];
+                let incoming = samples[i + self.window_size - 1];
+                current_sum_sq += (incoming as f64) * (incoming as f64) - (outgoing as f64) * (outgoing as f64);
+                // Float precision can sometimes cause sum_sq to drop slightly below 0
+                current_sum_sq = current_sum_sq.max(0.0);
+            }
+
+            let rms = ((current_sum_sq / self.window_size as f64).sqrt()) as f32;
 
             if !triggered && rms > self.threshold {
                 triggered = true;

@@ -49,8 +49,6 @@ where
     }
 }
 
-/// Config error compatibility
-pub use SpectrumError as ConfigError;
 
 #[cfg(test)]
 mod tests {

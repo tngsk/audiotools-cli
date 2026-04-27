@@ -1,7 +1,7 @@
 use anyhow::Result;
 use audiotools_core::audio::{load_audio, save_wav};
 use audiotools_core::dsp::{spectral_flux, Stft};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 pub struct AudioSegmenter {
     pub segment_len_sec: f32,

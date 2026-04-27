@@ -15,7 +15,11 @@ pub struct AudioFeatures {
 }
 
 pub fn calculate_rms(y: &[f32]) -> f32 {
-    let sum_sq: f32 = y.iter().map(|&x| x * x).sum();
+    if y.is_empty() {
+        return 0.0;
+    }
+    // Optimization: using fold is slightly faster and auto-vectorizes better than map.sum
+    let sum_sq = y.iter().fold(0.0, |acc, &x| acc + x * x);
     (sum_sq / y.len() as f32).sqrt()
 }
 
@@ -46,7 +50,7 @@ pub fn calculate_spectral_features(
         .map(|i| i as f32 * sr as f32 / n_fft as f32)
         .collect();
 
-    for (i, mag) in magnitudes.iter().enumerate() {
+    for (_i, mag) in magnitudes.iter().enumerate() {
         // Centroid & Rolloff
         let mut sum_mag = 0.0;
         let mut sum_freq_mag = 0.0;

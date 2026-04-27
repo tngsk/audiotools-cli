@@ -2,7 +2,6 @@ pub mod builder;
 pub mod presets;
 pub mod validator;
 
-pub use presets::{frequency_preset, get_duration_preset};
 pub use validator::validate_config;
 
 use crate::error::SpectrumError;
