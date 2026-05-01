@@ -11,3 +11,8 @@ walkdir = "2.5.0"
 tokio = { version = "1", features = ["full"] }
 rodio = "0.20.1"
 audiotools-core = { path = "../core" }
+anyhow = "1.0.102"
+
+[lib]
+name = "waveform_cli"
+path = "src/lib.rs"

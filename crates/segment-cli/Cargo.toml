@@ -18,3 +18,7 @@ audiotools-core = { path = "../core" }
 
 [dev-dependencies]
 tempfile = "3.10"
+
+[lib]
+name = "segment_cli"
+path = "src/lib.rs"

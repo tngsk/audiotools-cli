@@ -10,3 +10,8 @@ tokio = { version = "1", features = ["full"] }
 audiotools-core = { path = "../core" }
 symphonia = { version = "0.5.5", features = ["all"] }
 ebur128 = "0.1.10"
+anyhow = "1.0.102"
+
+[lib]
+name = "loudness_cli"
+path = "src/lib.rs"

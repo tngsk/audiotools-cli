@@ -19,3 +19,7 @@ ndarray = "0.15"
 smartcore = "0.4.9"
 plotters = "0.3"
 audiotools-core = { path = "../core" }
+
+[lib]
+name = "pca_cli"
+path = "src/lib.rs"
