@@ -41,9 +41,9 @@ pub fn calculate_spectral_features(
 ) -> (f32, f32, f32, f32) {
     // Calculates: Centroid, Rolloff, Flatness, Flux (Mean)
 
-    let mut centroids = Vec::new();
-    let mut rolloffs = Vec::new();
-    let mut flatnesses = Vec::new(); // fluxes is now calculated via core
+    let mut centroids = Vec::with_capacity(magnitudes.len());
+    let mut rolloffs = Vec::with_capacity(magnitudes.len());
+    let mut flatnesses = Vec::with_capacity(magnitudes.len()); // fluxes is now calculated via core
 
     // Frequency bins
     let bin_freqs: Vec<f32> = (0..=n_fft / 2)

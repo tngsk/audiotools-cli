@@ -88,11 +88,12 @@ impl FFTProcessor {
             return Err(SpectrumError::new("Signal too short for window size"));
         }
 
-        let mut spectrogram = Vec::new();
-        let mut pos = 0;
-
         // Use smaller hop size for smoother time resolution
         let effective_hop_size = self.config.hop_size;
+        let estimated_frames =
+            (samples.len().saturating_sub(self.config.window_size)) / effective_hop_size + 2;
+        let mut spectrogram = Vec::with_capacity(estimated_frames);
+        let mut pos = 0;
 
         while pos + self.config.window_size <= samples.len() {
             let frame_samples = &samples[pos..pos + self.config.window_size];
@@ -130,9 +131,11 @@ impl FFTProcessor {
         padded_samples.extend(vec![0.0; padding_samples]);
 
         // Process with padding
-        let mut spectrogram = Vec::new();
-        let mut pos = 0;
         let effective_hop_size = self.config.hop_size;
+        let estimated_frames =
+            (padded_samples.len().saturating_sub(self.config.window_size)) / effective_hop_size + 2;
+        let mut spectrogram = Vec::with_capacity(estimated_frames);
+        let mut pos = 0;
 
         while pos + self.config.window_size <= padded_samples.len() {
             let frame_samples = &padded_samples[pos..pos + self.config.window_size];
