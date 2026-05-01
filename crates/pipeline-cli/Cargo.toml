@@ -1,0 +1,23 @@
+[package]
+name = "pipeline-cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+audiotools-core = { path = "../core" }
+anyhow = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+serde_json = "1.0"
+tokio = { version = "1.42", features = ["full"] }
+
+normalize-cli = { path = "../normalize-cli" }
+convert-cli = { path = "../convert-cli" }
+spectrum-cli = { path = "../spectrum-cli" }
+waveform-cli = { path = "../waveform-cli" }
+segment-cli = { path = "../segment-cli" }
+features-cli = { path = "../features-cli" }
+pca-cli = { path = "../pca-cli" }
+info-cli = { path = "../info-cli" }
+loudness-cli = { path = "../loudness-cli" }

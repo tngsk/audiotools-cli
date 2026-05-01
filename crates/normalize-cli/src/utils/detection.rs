@@ -37,14 +37,18 @@ impl AutoStartDetection {
         }
 
         // Calculate initial sum of squares for the first window
-        let mut current_sum_sq: f64 = samples[0..self.window_size].iter().map(|&x| (x as f64) * (x as f64)).sum();
+        let mut current_sum_sq: f64 = samples[0..self.window_size]
+            .iter()
+            .map(|&x| (x as f64) * (x as f64))
+            .sum();
 
         for i in 0..=samples.len().saturating_sub(self.window_size) {
             // Update sliding window sum of squares for O(1) performance instead of O(N)
             if i > 0 {
                 let outgoing = samples[i - 1];
                 let incoming = samples[i + self.window_size - 1];
-                current_sum_sq += (incoming as f64) * (incoming as f64) - (outgoing as f64) * (outgoing as f64);
+                current_sum_sq +=
+                    (incoming as f64) * (incoming as f64) - (outgoing as f64) * (outgoing as f64);
                 // Float precision can sometimes cause sum_sq to drop slightly below 0
                 current_sum_sq = current_sum_sq.max(0.0);
             }

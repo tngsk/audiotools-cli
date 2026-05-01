@@ -10,5 +10,5 @@ members = [
     "crates/waveform-cli",
     "crates/segment-cli",
     "crates/features-cli",
-    "crates/pca-cli",
+    "crates/pca-cli", "crates/pipeline-cli",
 ]

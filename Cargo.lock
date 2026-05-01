@@ -120,9 +120,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.100"
+version = "1.0.102"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a23eb6b1614318a8071c9b2521f36b424b2c83db5eb3a0fead4a6c0809af6e61"
+checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
 name = "approx"
@@ -439,6 +439,7 @@ dependencies = [
 name = "convert-cli"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "audiotools-core",
  "clap",
  "hound",
@@ -1020,6 +1021,7 @@ dependencies = [
 name = "info-cli"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "audiotools-core",
  "byteorder",
  "clap",
@@ -1185,6 +1187,7 @@ checksum = "a7a70ba024b9dc04c27ea2f0c0548feb474ec5c54bba33a7f72f873a39d07b24"
 name = "loudness-cli"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "audiotools-core",
  "clap",
  "ebur128",
@@ -1301,6 +1304,7 @@ dependencies = [
 name = "normalize-cli"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "audiotools-core",
  "clap",
  "hound",
@@ -1550,6 +1554,28 @@ name = "pin-project-lite"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b3cff922bd51709b605d9ead9aa71031d81447142d828eb4a6eba76fe619f9b"
+
+[[package]]
+name = "pipeline-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "audiotools-core",
+ "clap",
+ "convert-cli",
+ "features-cli",
+ "info-cli",
+ "loudness-cli",
+ "normalize-cli",
+ "pca-cli",
+ "segment-cli",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "spectrum-cli",
+ "tokio",
+ "waveform-cli",
+]
 
 [[package]]
 name = "pkg-config"
@@ -2084,6 +2110,7 @@ dependencies = [
 name = "spectrum-cli"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "audiotools-core",
  "byteorder",
  "clap",
@@ -2607,6 +2634,7 @@ checksum = "65fc09f10666a9f147042251e0dda9c18f166ff7de300607007e96bdebc1068d"
 name = "waveform-cli"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "audiotools-core",
  "clap",
  "hound",

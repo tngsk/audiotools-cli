@@ -59,7 +59,7 @@ impl SpectrogramConfig {
     /// # Examples
     ///
     /// ```
-    /// use crate::core::config::SpectrogramConfig;
+    /// use spectrum_cli::core::config::SpectrogramConfig;
     /// fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// // 50ms analysis (very short) - use small window for high time resolution
     /// let window_size = SpectrogramConfig::calculate_optimal_window_size(50.0, 44100.0);
@@ -108,7 +108,7 @@ impl SpectrogramConfig {
     /// # Examples
     ///
     /// ```
-    /// use crate::core::config::SpectrogramConfig;
+    /// use spectrum_cli::core::config::SpectrogramConfig;
     /// fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// // 80ms analysis duration - uses 256 window with 95% overlap
     /// let config = SpectrogramConfig::for_short_audio(44100.0, 20.0, 8000.0, 80.0)?;
@@ -228,7 +228,7 @@ impl SpectrogramConfig {
     /// # Examples
     ///
     /// ```
-    /// use crate::core::config::SpectrogramConfig;
+    /// use spectrum_cli::core::config::SpectrogramConfig;
     /// fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// // Auto-configure for 120ms analysis
     /// // - Uses window_size=256, hop_size=13 (95% overlap)
