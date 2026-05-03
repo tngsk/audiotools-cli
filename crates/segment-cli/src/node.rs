@@ -19,7 +19,8 @@ impl Node for SegmentNode {
         };
 
         let samples_per_segment = (self.segment_len * sample_rate as f32) as usize;
-        let mut segments = Vec::new();
+        let expected_segments = (samples.len() + samples_per_segment - 1) / samples_per_segment;
+        let mut segments = Vec::with_capacity(expected_segments);
 
         for chunk in samples.chunks(samples_per_segment) {
             segments.push((chunk.to_vec(), sample_rate));
