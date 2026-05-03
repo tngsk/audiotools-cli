@@ -33,8 +33,13 @@ impl AudioSegmenter {
         let onsets = self.detect_onsets(y_trimmed, sr);
 
         // 3. Segment logic
-        let mut segments = Vec::new();
         let segment_samples = (self.segment_len_sec * sr as f32) as usize;
+        let estimated_capacity = if segment_samples > 0 {
+            (y_trimmed.len() / segment_samples) + onsets.len()
+        } else {
+            onsets.len()
+        };
+        let mut segments = Vec::with_capacity(estimated_capacity);
 
         if !onsets.is_empty() {
             let mut last_end: i64 = -(segment_samples as i64);
@@ -81,7 +86,7 @@ impl AudioSegmenter {
         // Convert back to linear for comparison? or db comparison
 
         // Calculate RMS profile
-        let mut valid_indices = Vec::new();
+        let mut valid_indices = Vec::with_capacity(y.len() / hop_len + 1);
         // Sliding window
         let mut i = 0;
         while i + frame_len <= y.len() {

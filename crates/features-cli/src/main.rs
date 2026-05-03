@@ -84,7 +84,7 @@ fn main() -> Result<()> {
 
     println!("Found {} files to process.", files.len());
 
-    let mut results = Vec::new();
+    let mut results = Vec::with_capacity(files.len());
     let pb = ProgressBar::new(files.len() as u64);
 
     let n_fft = 2048;
