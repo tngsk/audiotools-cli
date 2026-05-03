@@ -81,12 +81,14 @@ impl AudioSegmenter {
         // Convert back to linear for comparison? or db comparison
 
         // Calculate RMS profile
-        let mut valid_indices = Vec::new();
+        let expected_frames = (y.len().saturating_sub(frame_len)) / hop_len + 1;
+        let mut valid_indices = Vec::with_capacity(expected_frames);
         // Sliding window
         let mut i = 0;
         while i + frame_len <= y.len() {
             let chunk = &y[i..i + frame_len];
-            let rms = (chunk.iter().map(|x| x * x).sum::<f32>() / chunk.len() as f32).sqrt();
+            let sum_sq = chunk.iter().fold(0.0, |acc, &x| acc + x * x);
+            let rms = (sum_sq / chunk.len() as f32).sqrt();
             let db = 20.0 * rms.max(1e-9).log10();
             if db >= threshold {
                 valid_indices.push(i);

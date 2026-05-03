@@ -23,7 +23,7 @@ impl Node for FeaturesNode {
         let mut features = HashMap::new();
 
         if self.extract_rms {
-            let sum_sq: f32 = samples.iter().map(|&x| x * x).sum();
+            let sum_sq: f32 = samples.iter().fold(0.0, |acc, &x| acc + x * x);
             let rms = (sum_sq / samples.len() as f32).sqrt();
             features.insert("rms".to_string(), vec![rms]);
         }
