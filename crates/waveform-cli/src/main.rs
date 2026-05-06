@@ -386,7 +386,7 @@ fn calculate_rms(samples: &[f32], window_size: usize) -> Vec<f32> {
     let mut current_end = 0;
 
     for i in 0..samples.len() {
-        let target_start = if i < half_window { 0 } else { i - half_window };
+        let target_start = i.saturating_sub(half_window);
         let target_end = (i + half_window).min(samples.len());
 
         // Slide the end pointer forward
@@ -403,11 +403,8 @@ fn calculate_rms(samples: &[f32], window_size: usize) -> Vec<f32> {
             current_start += 1;
         }
 
-        // Float precision can sometimes cause sum_sq to drop slightly below 0
-        current_sum_sq = current_sum_sq.max(0.0);
-
         let count = (target_end - target_start) as f32;
-        rms_values.push((current_sum_sq / count).sqrt());
+        rms_values.push((current_sum_sq.max(0.0) / count).sqrt());
     }
     rms_values
 }
