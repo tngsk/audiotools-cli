@@ -86,7 +86,9 @@ impl AudioSegmenter {
         // Convert back to linear for comparison? or db comparison
 
         // Calculate RMS profile
-        let mut valid_indices = Vec::with_capacity(y.len() / hop_len + 1);
+        let expected_frames = (y.len().saturating_sub(frame_len)) / hop_len + 1;
+        // Pre-allocate to avoid reallocations
+        let mut valid_indices = Vec::with_capacity(expected_frames);
         // Sliding window
         let mut i = 0;
         while i + frame_len <= y.len() {
@@ -127,7 +129,9 @@ impl AudioSegmenter {
 
         let threshold = mean_flux + 1.0 * std_flux; // Tunable parameter
 
-        let mut onsets = Vec::new();
+        let expected_frames = (y.len().saturating_sub(n_fft)) / hop_length + 1;
+        // Pre-allocate to avoid reallocations
+        let mut onsets = Vec::with_capacity(expected_frames / 10);
         let wait_frames = (sr as f32 * 0.2 / hop_length as f32) as usize; // 200ms wait
         let mut last_onset = 0;
 

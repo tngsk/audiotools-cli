@@ -64,7 +64,8 @@ fn main() -> Result<()> {
     // Identify numeric columns
     let non_numeric = ["file_name", "path", "segment_id"];
 
-    let mut numeric_indices = Vec::new();
+    // Pre-allocate to avoid reallocations
+    let mut numeric_indices = Vec::with_capacity(headers.len());
     for (i, h) in headers.iter().enumerate() {
         if !non_numeric.contains(&h) {
             numeric_indices.push(i);
@@ -74,7 +75,8 @@ fn main() -> Result<()> {
 
     for result in rdr.records() {
         let record = result?;
-        let mut row = Vec::new();
+        // Pre-allocate to avoid reallocations
+        let mut row = Vec::with_capacity(numeric_indices.len());
 
         // Extract file name
         if let Some(idx) = headers.iter().position(|h| h == "file_name") {
