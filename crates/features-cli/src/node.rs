@@ -31,9 +31,8 @@ impl Node for FeaturesNode {
         if self.extract_zcr {
             let mut crossings = 0;
             for i in 1..samples.len() {
-                if (samples[i - 1] < 0.0 && samples[i] >= 0.0)
-                    || (samples[i - 1] >= 0.0 && samples[i] < 0.0)
-                {
+                // Optimization: simplified boolean branch reduces overhead
+                if (samples[i] >= 0.0) != (samples[i - 1] >= 0.0) {
                     crossings += 1;
                 }
             }
