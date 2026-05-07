@@ -22,18 +22,20 @@ fn load_wav(reader: WavReader<BufReader<File>>) -> Result<(Vec<f32>, u32)> {
         hound::SampleFormat::Int => {
             let bits = spec.bits_per_sample;
             let max_val = 2.0_f32.powi(bits as i32 - 1);
+            let inv_max_val = 1.0 / max_val;
             reader
                 .into_samples::<i32>()
-                .map(|s| s.map(|x| x as f32 / max_val))
+                .map(|s| s.map(|x| x as f32 * inv_max_val))
                 .collect::<Result<Vec<_>, _>>()?
         }
     };
 
     let channels = spec.channels as usize;
     if channels > 1 {
+        let inv_channels = 1.0 / channels as f32;
         let mono_samples = samples
             .chunks(channels)
-            .map(|chunk| chunk.iter().sum::<f32>() / channels as f32)
+            .map(|chunk| chunk.iter().sum::<f32>() * inv_channels)
             .collect();
         return Ok((mono_samples, sample_rate));
     }
@@ -50,9 +52,10 @@ fn load_generic(path: &Path) -> Result<(Vec<f32>, u32)> {
     let samples: Vec<f32> = source.convert_samples().collect();
 
     if channels > 1 {
+        let inv_channels = 1.0 / channels as f32;
         let mono_samples = samples
             .chunks(channels as usize)
-            .map(|chunk| chunk.iter().sum::<f32>() / channels as f32)
+            .map(|chunk| chunk.iter().sum::<f32>() * inv_channels)
             .collect();
         return Ok((mono_samples, sample_rate));
     }
