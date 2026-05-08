@@ -22,3 +22,8 @@
 **Learning:** When applying constant multipliers or scalers (e.g., normalization multipliers, bit-depth max value division) to an array of audio samples, performing divisions and multiplications like `(sample / max_val) * multiplier * max_val` inside the inner loop is extremely costly. Furthermore, when computing zero crossing rates, heavy logical branches like `(prev < 0 && curr >= 0) || (prev >= 0 && curr < 0)` generate unnecessary instructions that can simply be replaced with `(curr >= 0.0) != (prev >= 0.0)`, significantly improving performance.
 
 **Action:** Whenever iterating over audio samples to convert volume, levels or bits, always pre-calculate the combined scaling factor outside the loop and apply a single multiplication per sample. Use simplified bitwise or inequality operations for boolean conditions during iterations to eliminate branches. Avoid recalculating bounds on every loop iteration, for instance by using `i.saturating_sub(...)` instead of conditional expressions.
+
+## 2024-05-25 - Optimizing Floating-Point Divisions in Iterators
+
+**Learning:** When applying constant multipliers or dividing by max values inside a tight loop processing millions of samples (like chunk averaging or max-value normalizations during audio load), LLVM often cannot automatically replace divisions with reciprocal multiplications due to IEEE 754 precision rules.
+**Action:** Always pre-calculate the inverse of divisors outside of tight loops (e.g., `let inv_max_val = 1.0 / max_val;`) and perform multiplication (`val * inv_max_val`) within the loop. This can yield significant (often 2x-3x) speedups for simple array transformation phases.

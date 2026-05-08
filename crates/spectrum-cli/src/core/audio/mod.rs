@@ -17,26 +17,26 @@ impl AudioLoader for DefaultAudioLoader {
         let channels = spec.channels as u32;
 
         // Convert to mono f32 samples
+        let inv_channels = 1.0 / spec.channels as f32;
         let samples: Vec<f32> = match spec.sample_format {
             hound::SampleFormat::Float => {
                 let samples: std::result::Result<Vec<f32>, hound::Error> =
                     reader.samples::<f32>().collect();
                 samples?
                     .chunks(spec.channels as usize)
-                    .map(|chunk| chunk.iter().sum::<f32>() / chunk.len() as f32)
+                    .map(|chunk| chunk.iter().sum::<f32>() * inv_channels)
                     .collect()
             }
             hound::SampleFormat::Int => {
                 let bits = spec.bits_per_sample;
                 let max_value = (1 << (bits - 1)) as f32;
+                let inv_max_channels = 1.0 / (spec.channels as f32 * max_value);
 
                 let samples: std::result::Result<Vec<i32>, hound::Error> =
                     reader.samples::<i32>().collect();
                 samples?
                     .chunks(spec.channels as usize)
-                    .map(|chunk| {
-                        chunk.iter().sum::<i32>() as f32 / (chunk.len() as f32 * max_value)
-                    })
+                    .map(|chunk| chunk.iter().sum::<i32>() as f32 * inv_max_channels)
                     .collect()
             }
         };

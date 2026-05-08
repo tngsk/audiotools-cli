@@ -170,23 +170,25 @@ pub fn create_waveform(
     let sample_rate = spec.sample_rate as f32;
 
     // サンプルデータの読み込み
+    let inv_channels = 1.0 / spec.channels as f32;
     let samples: Vec<f32> = match spec.sample_format {
         hound::SampleFormat::Float => reader
             .samples::<f32>()
             .map(|s| s.unwrap())
             .collect::<Vec<f32>>()
             .chunks(spec.channels as usize)
-            .map(|chunk| chunk.iter().sum::<f32>() / chunk.len() as f32)
+            .map(|chunk| chunk.iter().sum::<f32>() * inv_channels)
             .collect(),
         hound::SampleFormat::Int => {
             let bits = spec.bits_per_sample;
             let max_value = (1 << (bits - 1)) as f32;
+            let inv_max_value = 1.0 / max_value;
             reader
                 .samples::<i32>()
-                .map(|s| s.unwrap() as f32 / max_value)
+                .map(|s| s.unwrap() as f32 * inv_max_value)
                 .collect::<Vec<f32>>()
                 .chunks(spec.channels as usize)
-                .map(|chunk| chunk.iter().sum::<f32>() / chunk.len() as f32)
+                .map(|chunk| chunk.iter().sum::<f32>() * inv_channels)
                 .collect()
         }
     };
