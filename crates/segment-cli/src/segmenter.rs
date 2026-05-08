@@ -89,14 +89,18 @@ impl AudioSegmenter {
         let expected_frames = (y.len().saturating_sub(frame_len)) / hop_len + 1;
         // Pre-allocate to avoid reallocations
         let mut valid_indices = Vec::with_capacity(expected_frames);
+
+        // Pre-calculate squared threshold to avoid expensive sqrt and log10 in the loop
+        let threshold_linear = 10.0_f32.powf(threshold / 20.0).max(1e-9);
+        let sum_sq_threshold = threshold_linear * threshold_linear * frame_len as f32;
+
         // Sliding window
         let mut i = 0;
         while i + frame_len <= y.len() {
             let chunk = &y[i..i + frame_len];
             let sum_sq = chunk.iter().fold(0.0, |acc, &x| acc + x * x);
-            let rms = (sum_sq / chunk.len() as f32).sqrt();
-            let db = 20.0 * rms.max(1e-9).log10();
-            if db >= threshold {
+
+            if sum_sq >= sum_sq_threshold {
                 valid_indices.push(i);
             }
             i += hop_len;
