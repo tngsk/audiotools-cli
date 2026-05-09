@@ -36,6 +36,9 @@ impl AutoStartDetection {
             return None;
         }
 
+        // Pre-calculate squared threshold to avoid expensive sqrt and division in the loop
+        let sum_sq_threshold = (self.threshold as f64 * self.threshold as f64) * self.window_size as f64;
+
         // Calculate initial sum of squares for the first window
         let mut current_sum_sq: f64 = samples[0..self.window_size]
             .iter()
@@ -53,9 +56,7 @@ impl AutoStartDetection {
                 current_sum_sq = current_sum_sq.max(0.0);
             }
 
-            let rms = ((current_sum_sq / self.window_size as f64).sqrt()) as f32;
-
-            if !triggered && rms > self.threshold {
+            if !triggered && current_sum_sq > sum_sq_threshold {
                 triggered = true;
                 potential_start = i;
             } else if triggered {
