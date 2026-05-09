@@ -27,3 +27,7 @@
 
 **Learning:** When applying constant multipliers or dividing by max values inside a tight loop processing millions of samples (like chunk averaging or max-value normalizations during audio load), LLVM often cannot automatically replace divisions with reciprocal multiplications due to IEEE 754 precision rules.
 **Action:** Always pre-calculate the inverse of divisors outside of tight loops (e.g., `let inv_max_val = 1.0 / max_val;`) and perform multiplication (`val * inv_max_val`) within the loop. This can yield significant (often 2x-3x) speedups for simple array transformation phases.
+## 2024-05-26 - Hoisting Expensive Math Operations from Hot Loops
+
+**Learning:** When processing audio in sliding windows or tight loops (like checking threshold values), mathematical operations such as `sqrt()` and `log10()` are computationally heavy. These can severely degrade performance when executed on every frame of a high-resolution signal.
+**Action:** Instead of converting a running signal to dB inside the loop (`20.0 * (sum_sq / chunk_len).sqrt().log10() >= threshold_db`), pre-calculate a squared threshold value outside the loop (`threshold_linear * threshold_linear * chunk_len`). Then, directly compare the raw `sum_sq` computed during the loop against this pre-calculated threshold. This mathematical equivalence achieves the exact same logical result while completely bypassing expensive float operations during traversal.
