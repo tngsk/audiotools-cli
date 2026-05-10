@@ -139,31 +139,30 @@ pub fn convert_files(
 
                 let mut sample_iter = decoder.into_iter();
 
-                // Optimization: Channel check hoisted outside the loop to prevent per-sample branch evaluation
+                // Optimization: Channel check hoisted outside the loop to prevent per-sample branch evaluation.
+                // We pre-calculate combined scaling factors outside the inner loop to replace multiple
+                // mathematical operations (including costly divisions) with a single multiplication and clamp.
+                let inv_max_i16 = 1.0 / i16::MAX as f32;
+                let combined_scale = inv_max_i16 * gain_multiplier * max_val;
+
                 if input_channels == 1 && output_channels == 2 {
                     // Mono to Stereo
                     for sample in sample_iter {
-                        let val = (sample as f32 / i16::MAX as f32) * gain_multiplier;
-                        let val = val.clamp(-1.0, 1.0) * max_val;
+                        let val = (sample as f32 * combined_scale).clamp(-max_val, max_val);
                         writer.write_sample(val as i32).unwrap();
                         writer.write_sample(val as i32).unwrap();
                     }
                 } else if input_channels == 2 && output_channels == 1 {
                     // Stereo to Mono
+                    let stereo_scale = CHANNEL_CONVERSION_FACTOR * combined_scale;
                     while let (Some(l), Some(r)) = (sample_iter.next(), sample_iter.next()) {
-                        let l_val = l as f32 / i16::MAX as f32;
-                        let r_val = r as f32 / i16::MAX as f32;
-                        let val = (l_val * CHANNEL_CONVERSION_FACTOR
-                            + r_val * CHANNEL_CONVERSION_FACTOR)
-                            * gain_multiplier;
-                        let val = val.clamp(-1.0, 1.0) * max_val;
+                        let val = ((l as f32 + r as f32) * stereo_scale).clamp(-max_val, max_val);
                         writer.write_sample(val as i32).unwrap();
                     }
                 } else {
                     // Keep channels
                     for sample in sample_iter {
-                        let val = (sample as f32 / i16::MAX as f32) * gain_multiplier;
-                        let val = val.clamp(-1.0, 1.0) * max_val;
+                        let val = (sample as f32 * combined_scale).clamp(-max_val, max_val);
                         writer.write_sample(val as i32).unwrap();
                     }
                 }
