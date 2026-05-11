@@ -86,8 +86,9 @@ impl AudioSegmenter {
         let mut i = 0;
         while i + frame_len <= y.len() {
             let chunk = &y[i..i + frame_len];
-            let rms = (chunk.iter().map(|x| x * x).sum::<f32>() / chunk.len() as f32).sqrt();
-            let db = 20.0 * rms.max(1e-9).log10();
+            let rms_sqr = chunk.iter().map(|x| x * x).sum::<f32>() / chunk.len() as f32;
+            // Optimization: Calculate dB from squared RMS to avoid sqrt operation
+            let db = 10.0 * rms_sqr.max(1e-18).log10();
             if db >= threshold {
                 valid_indices.push(i);
             }
