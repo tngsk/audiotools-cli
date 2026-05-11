@@ -142,27 +142,27 @@ pub fn convert_files(
                 // Optimization: Channel check hoisted outside the loop to prevent per-sample branch evaluation
                 if input_channels == 1 && output_channels == 2 {
                     // Mono to Stereo
+                    let factor = gain_multiplier / i16::MAX as f32;
                     for sample in sample_iter {
-                        let val = (sample as f32 / i16::MAX as f32) * gain_multiplier;
+                        let val = sample as f32 * factor;
                         let val = val.clamp(-1.0, 1.0) * max_val;
-                        writer.write_sample(val as i32).unwrap();
-                        writer.write_sample(val as i32).unwrap();
+                        let val_i32 = val as i32;
+                        writer.write_sample(val_i32).unwrap();
+                        writer.write_sample(val_i32).unwrap();
                     }
                 } else if input_channels == 2 && output_channels == 1 {
                     // Stereo to Mono
+                    let factor = (CHANNEL_CONVERSION_FACTOR * gain_multiplier) / i16::MAX as f32;
                     while let (Some(l), Some(r)) = (sample_iter.next(), sample_iter.next()) {
-                        let l_val = l as f32 / i16::MAX as f32;
-                        let r_val = r as f32 / i16::MAX as f32;
-                        let val = (l_val * CHANNEL_CONVERSION_FACTOR
-                            + r_val * CHANNEL_CONVERSION_FACTOR)
-                            * gain_multiplier;
+                        let val = (l as f32 + r as f32) * factor;
                         let val = val.clamp(-1.0, 1.0) * max_val;
                         writer.write_sample(val as i32).unwrap();
                     }
                 } else {
                     // Keep channels
+                    let factor = gain_multiplier / i16::MAX as f32;
                     for sample in sample_iter {
-                        let val = (sample as f32 / i16::MAX as f32) * gain_multiplier;
+                        let val = sample as f32 * factor;
                         let val = val.clamp(-1.0, 1.0) * max_val;
                         writer.write_sample(val as i32).unwrap();
                     }
