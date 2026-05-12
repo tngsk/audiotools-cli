@@ -147,6 +147,7 @@ pub fn convert_files(
 
                 if input_channels == 1 && output_channels == 2 {
                     // Mono to Stereo
+                    let factor = gain_multiplier / i16::MAX as f32;
                     for sample in sample_iter {
                         let val = (sample as f32 * combined_scale).clamp(-max_val, max_val);
                         writer.write_sample(val as i32).unwrap();
@@ -161,6 +162,7 @@ pub fn convert_files(
                     }
                 } else {
                     // Keep channels
+                    let factor = gain_multiplier / i16::MAX as f32;
                     for sample in sample_iter {
                         let val = (sample as f32 * combined_scale).clamp(-max_val, max_val);
                         writer.write_sample(val as i32).unwrap();
