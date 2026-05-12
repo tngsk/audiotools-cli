@@ -112,10 +112,12 @@ pub fn detect_peak_level(input: &PathBuf) -> Result<f32, Box<dyn std::error::Err
             hound::SampleFormat::Int => {
                 let bits = spec.bits_per_sample;
                 let max_value = (1 << (bits - 1)) as f32;
+                // Optimization: Pre-calculate inverse to replace division with multiplication in hot loop
+                let inv_max_value = 1.0 / max_value;
 
                 for sample in reader.into_samples::<i32>() {
                     if let Ok(sample) = sample {
-                        let normalized = sample as f32 / max_value;
+                        let normalized = sample as f32 * inv_max_value;
                         max_peak = max_peak.max(normalized.abs());
                     }
                 }
@@ -129,7 +131,7 @@ pub fn detect_peak_level(input: &PathBuf) -> Result<f32, Box<dyn std::error::Err
 
         // i16サンプルをf32に正規化(-1.0から1.0の範囲に)
         for sample in decoder {
-            let normalized = sample as f32 / 32768.0; // i16の最大値で正規化
+            let normalized = sample as f32 * (1.0 / 32768.0); // i16の最大値で正規化
             max_peak = max_peak.max(normalized.abs());
         }
     }
