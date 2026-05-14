@@ -37,3 +37,6 @@
 
 **Learning:** Inside inner loops used to copy and convert audio samples, re-evaluating the formula `(sample as f32 / max_val_f32) * gain_multiplier` for every sample introduces redundant division and multiplication operations. Due to strict float ordering rules in LLVM (IEEE 754), these operations aren't easily hoisted automatically.
 **Action:** Pre-calculate scaling factor combinations out-of-loop (e.g. `let factor = gain_multiplier / i16::MAX as f32;` or `(CHANNEL_CONVERSION_FACTOR * gain_multiplier) / i16::MAX as f32`) to ensure that inner-loop work involves at most a single multiplication per sample.
+## 2024-05-27 - Eliminating Intermediate Vector Allocations for Rendering
+**Learning:** When generating graphical points for large arrays (like audio waveforms), collecting intermediate mappings into full `Vec` structures (e.g., creating arrays of timestamp points or zipped coordinates) triggers massive, unnecessary memory allocations.
+**Action:** Instead of collecting intermediate transformed data into a `Vec`, use iterator chains with `.enumerate().map(...)` and pass them directly to plotting library series (which consume iterators). Also, avoid deep copying slices (e.g. `.to_vec()`) when a simple slice reference `&[...]` is sufficient for the downstream computations.
