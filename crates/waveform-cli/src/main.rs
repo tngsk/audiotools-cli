@@ -222,7 +222,7 @@ pub fn create_waveform(
     // サンプル範囲の切り出し
     let start_sample = (start_time * sample_rate) as usize;
     let end_sample = (end_time * sample_rate) as usize;
-    let samples = samples[start_sample..end_sample].to_vec();
+    let samples = &samples[start_sample..end_sample];
 
     // RMS値の計算
     let window_size = (sample_rate * 0.02) as usize; // 20ms window
@@ -315,42 +315,30 @@ pub fn create_waveform(
         .draw()?;
 
     // 波形の描画
-    let time_points: Vec<f32> = (0..samples.len())
-        .map(|i| start_time + i as f32 / sample_rate)
-        .collect();
 
     // RMS波形の描画を条件付きに
     if show_rms {
-        let rms_points: Vec<(f32, f32)> = time_points
-            .iter()
-            .zip(rms_values.iter())
-            .map(|(&t, &rms)| match scale {
+        let rms_points = rms_values.iter().enumerate().map(|(i, &rms)| {
+            let t = start_time + i as f32 / sample_rate;
+            match scale {
                 WaveformScale::Amplitude => (t, rms),
                 WaveformScale::Decibel => (t, amplitude_to_db(rms)),
-            })
-            .collect();
+            }
+        });
 
-        chart.draw_series(AreaSeries::new(
-            rms_points.iter().map(|&(x, y)| (x, y)),
-            0.0,
-            &RMS_COLOR,
-        ))?;
+        chart.draw_series(AreaSeries::new(rms_points, 0.0, &RMS_COLOR))?;
     }
 
     // ピーク波形の描画
-    let peak_points: Vec<(f32, f32)> = time_points
-        .iter()
-        .zip(samples.iter())
-        .map(|(&t, &sample)| match scale {
+    let peak_points = samples.iter().enumerate().map(|(i, &sample)| {
+        let t = start_time + i as f32 / sample_rate;
+        match scale {
             WaveformScale::Amplitude => (t, sample),
             WaveformScale::Decibel => (t, amplitude_to_db(sample)),
-        })
-        .collect();
+        }
+    });
 
-    chart.draw_series(LineSeries::new(
-        peak_points.iter().map(|&(x, y)| (x, y)),
-        &PEAK_COLOR,
-    ))?;
+    chart.draw_series(LineSeries::new(peak_points, &PEAK_COLOR))?;
 
     // アノテーションの描画
     if let Some(annotations) = annotations {
