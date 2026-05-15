@@ -37,3 +37,13 @@
 
 **Learning:** Inside inner loops used to copy and convert audio samples, re-evaluating the formula `(sample as f32 / max_val_f32) * gain_multiplier` for every sample introduces redundant division and multiplication operations. Due to strict float ordering rules in LLVM (IEEE 754), these operations aren't easily hoisted automatically.
 **Action:** Pre-calculate scaling factor combinations out-of-loop (e.g. `let factor = gain_multiplier / i16::MAX as f32;` or `(CHANNEL_CONVERSION_FACTOR * gain_multiplier) / i16::MAX as f32`) to ensure that inner-loop work involves at most a single multiplication per sample.
+
+## 2024-05-27 - Hoisting Linear Search Operations from Inner Loops
+
+**Learning:** When parsing large CSV files row-by-row, evaluating the index of a specific header column via `headers.iter().position(...)` inside the loop causes a redundant O(N) array search on every iteration.
+**Action:** Always pre-calculate header column indices or other constant lookups outside of hot loops to convert O(N*M) bottlenecks into O(M) operations.
+
+## 2024-05-28 - Flattening Vecs vs. Direct Allocation
+
+**Learning:** When constructing a 1-dimensional array (like `DenseMatrix` input data) from a series of rows (like CSV records), allocating an intermediate array of arrays (`Vec<Vec<f32>>`) and subsequently processing it via `.into_iter().flatten().collect()` introduces redundant heap allocations, resizing overhead, and O(M) garbage generation.
+**Action:** Eliminate the intermediate structure and push values directly into a single pre-allocated flat vector. This significantly reduces GC overhead and improves contiguous memory layout.
