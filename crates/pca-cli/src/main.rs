@@ -57,7 +57,6 @@ fn main() -> Result<()> {
         .with_context(|| format!("Failed to open CSV: {:?}", input_path))?;
 
     let headers = rdr.headers()?.clone();
-    let mut data_rows = Vec::new();
     let mut file_names = Vec::new();
     let mut feature_names = Vec::new();
 
@@ -73,13 +72,14 @@ fn main() -> Result<()> {
         }
     }
 
+    let mut flattened: Vec<f32> = Vec::new();
+    let file_name_idx = headers.iter().position(|h| h == "file_name");
+
     for result in rdr.records() {
         let record = result?;
-        // Pre-allocate to avoid reallocations
-        let mut row = Vec::with_capacity(numeric_indices.len());
 
         // Extract file name
-        if let Some(idx) = headers.iter().position(|h| h == "file_name") {
+        if let Some(idx) = file_name_idx {
             file_names.push(record.get(idx).unwrap_or("?").to_string());
         } else {
             file_names.push("?".to_string());
@@ -89,20 +89,18 @@ fn main() -> Result<()> {
         for &idx in &numeric_indices {
             let val_str = record.get(idx).unwrap_or("0");
             let val: f32 = val_str.parse().unwrap_or(0.0);
-            row.push(val);
+            flattened.push(val);
         }
-        data_rows.push(row);
     }
 
-    if data_rows.is_empty() {
+    if flattened.is_empty() {
         println!("No data found.");
         return Ok(());
     }
 
     // Convert to DenseMatrix
-    let n_samples = data_rows.len();
-    let n_features = data_rows[0].len();
-    let flattened: Vec<f32> = data_rows.into_iter().flatten().collect();
+    let n_samples = file_names.len();
+    let n_features = numeric_indices.len();
 
     // Smartcore DenseMatrix is row-major by default? Yes.
     // Explicitly using new(nrows, ncols, values, column_major=false)
