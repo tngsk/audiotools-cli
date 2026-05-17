@@ -66,8 +66,8 @@ impl SpectrogramRenderer for DefaultSpectrogramRenderer {
         chart
             .configure_mesh()
             .label_style((FONT_FAMILY, 14).into_font().color(&WHITE))
-            .light_line_style(&WHITE.mix(0.05))
-            .axis_style(&WHITE.mix(0.5))
+            .light_line_style(WHITE.mix(0.05))
+            .axis_style(WHITE.mix(0.5))
             .x_labels(20)
             .x_label_formatter(&|x| format!("{:.1}", x))
             .y_desc("Frequency (Hz)")
@@ -111,6 +111,7 @@ fn draw_spectrogram_data(
 ) -> Result<(), SpectrumError> {
     let freq_resolution = config.freq_resolution();
     let (min_db, max_db) = get_adaptive_db_range(config.window_size);
+    let inv_db_range = 1.0 / (max_db - min_db);
     let use_interpolation = analysis_duration_ms < 300.0 && spectrogram_data.len() > 30;
 
     // Use exact steps without artificial overlap to prevent gaps and artifacts
@@ -144,8 +145,7 @@ fn draw_spectrogram_data(
 
                 // Only render frequencies within our range
                 if freq_start >= config.min_freq && freq_start <= config.max_freq {
-                    let normalized_power =
-                        ((power_db - min_db) / (max_db - min_db)).max(0.0).min(1.0);
+                    let normalized_power = ((power_db - min_db) * inv_db_range).clamp(0.0, 1.0);
 
                     // Render all power levels for complete coverage
                     if normalized_power > 0.001 {
@@ -179,6 +179,7 @@ fn draw_interpolated_spectrogram(
 ) -> Result<(), SpectrumError> {
     let freq_resolution = config.freq_resolution();
     let (min_db, max_db) = get_adaptive_db_range(config.window_size);
+    let inv_db_range = 1.0 / (max_db - min_db);
 
     // Simple linear interpolation between frames
     for (frame_idx, window) in spectrogram_data.windows(2).enumerate() {
@@ -197,7 +198,7 @@ fn draw_interpolated_spectrogram(
                 }
 
                 let power = curr_power + (next_power - curr_power) * t;
-                let normalized = ((power - min_db) / (max_db - min_db)).clamp(0.0, 1.0);
+                let normalized = ((power - min_db) * inv_db_range).clamp(0.0, 1.0);
 
                 if normalized > 0.001 {
                     chart
@@ -217,7 +218,7 @@ fn draw_interpolated_spectrogram(
         for (bin, &power) in last.iter().enumerate() {
             let freq = bin as f32 * freq_resolution;
             if freq >= config.min_freq && freq <= config.max_freq {
-                let normalized = ((power - min_db) / (max_db - min_db)).clamp(0.0, 1.0);
+                let normalized = ((power - min_db) * inv_db_range).clamp(0.0, 1.0);
                 if normalized > 0.001 {
                     chart
                         .draw_series(std::iter::once(Rectangle::new(
