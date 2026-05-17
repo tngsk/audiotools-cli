@@ -37,3 +37,7 @@
 
 **Learning:** Inside inner loops used to copy and convert audio samples, re-evaluating the formula `(sample as f32 / max_val_f32) * gain_multiplier` for every sample introduces redundant division and multiplication operations. Due to strict float ordering rules in LLVM (IEEE 754), these operations aren't easily hoisted automatically.
 **Action:** Pre-calculate scaling factor combinations out-of-loop (e.g. `let factor = gain_multiplier / i16::MAX as f32;` or `(CHANNEL_CONVERSION_FACTOR * gain_multiplier) / i16::MAX as f32`) to ensure that inner-loop work involves at most a single multiplication per sample.
+## 2024-05-27 - Hoisting Divisors in Rendering Interpolation Loops
+
+**Learning:** When calculating `normalized` power inside the plotters `draw_series` hot loops in `spectrum-cli` render code, repeated floating-point divisions like `(power - min_db) / (max_db - min_db)` on every bin pixel prevent optimal vectorization and cost significant CPU cycles per frame.
+**Action:** Always precalculate reciprocal constants (like `let inv_db_range = 1.0 / (max_db - min_db);`) outside the hot loop and replace the division with multiplication `(power - min_db) * inv_db_range`. Combined with `clamp`, this dramatically speeds up massive frame interpolations without sacrificing visual correctness.
